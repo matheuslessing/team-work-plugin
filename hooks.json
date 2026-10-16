@@ -1,0 +1,24 @@
+{
+  "PostCompaction": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "node -e \"const fs=require('fs'),p=require('path'),r=process.env.DEVIN_PROJECT_DIR||process.cwd(),tw=p.join(r,'.agents','teamwork');if(fs.existsSync(tw)){const files=['ORIGINAL_REQUEST.md','sentinel/BRIEFING.md','orchestrator_1/BRIEFING.md','orchestrator_1/PROJECT.md','orchestrator_1/GATE_STATUS.md'];const ctx=files.map(f=>{const fp=p.join(tw,f);return fs.existsSync(fp)?'### '+f+'\\n'+fs.readFileSync(fp,'utf8').slice(0,3000):'';}).filter(Boolean).join('\\n\\n');if(ctx)console.log(JSON.stringify({hookSpecificOutput:{hookEventName:'PostCompaction',additionalContext:'[TEAMWORK STATE RECOVERED AFTER COMPACTION]\\n'+ctx}}));}\"",
+          "timeout": 10
+        }
+      ]
+    }
+  ],
+  "Stop": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "node -e \"const fs=require('fs'),p=require('path'),r=process.env.DEVIN_PROJECT_DIR||process.cwd(),gs=p.join(r,'.agents','teamwork','orchestrator_1','GATE_STATUS.md'),ob=p.join(r,'.agents','teamwork','orchestrator_1','BRIEFING.md');if(fs.existsSync(gs)&&fs.existsSync(ob)){const g=fs.readFileSync(gs,'utf8'),b=fs.readFileSync(ob,'utf8');if(b.includes('[in-progress]')&&g.includes('Gate Result: **FAIL**')&&!g.includes('Gate Result: **PASS**')){console.log(JSON.stringify({hookSpecificOutput:{hookEventName:'Stop',additionalContext:'[TEAMWORK GATE WARNING] GATE_STATUS.md still reports FAIL with active in-progress milestone. Ensure remediation and Forensic Audit achieve CLEAN before declaring final victory.'}}));}}\"",
+          "timeout": 10
+        }
+      ]
+    }
+  ]
+}

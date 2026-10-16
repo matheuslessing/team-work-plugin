@@ -1,0 +1,22 @@
+{
+  "name": "teamwork",
+  "version": "1.0.0",
+  "description": "Autonomous multi-agent engineering system for Devin CLI: 9-step prompt crafting, hierarchical orchestration (Sentinel -> Orchestrator -> Explorers, Workers, Test Writer), 4-tier opaque-box E2E testing, adversarial challengers, and binary forensic integrity auditing.",
+  "author": {
+    "name": "Matheus Lessing"
+  },
+  "homepage": "https://github.com/matheuslessing/team-work-plugin",
+  "repository": "https://github.com/matheuslessing/team-work-plugin.git",
+  "license": "MIT",
+  "keywords": [
+    "teamwork",
+    "multi-agent",
+    "orchestrator",
+    "subagents",
+    "forensic-audit",
+    "e2e-testing",
+    "adversarial-review",
+    "quality-gates"
+  ],
+  "skills": "skills"
+}
