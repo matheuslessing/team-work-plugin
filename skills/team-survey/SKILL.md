@@ -17,6 +17,14 @@ triggers:
 
 Execute a comprehensive, read-only multi-agent survey of the codebase to establish empirical facts, identify root causes, and author `.agents/teamwork/orchestrator_1/PROJECT.md`.
 
+## Step 0: Automatic Runtime Detection (No User Reminder Needed)
+Run environment detection first:
+```bash
+node "${PLUGIN_ROOT}/scripts/teamwork-cli.mjs" detect-env --workdir .
+```
+- **If `DEVIN_CLOUD` is detected**: Automatically run `.agents/teamwork/workflow.py --mode survey` (`teamwork-survey-pipeline`) as primary engine, or fall back automatically to spawning parallel Explorer child sessions via `devin_session_create` + `devin_session_gather`.
+- **If `DEVIN_CLI_LOCAL` is detected**: Spawn parallel `teamwork:explorer` custom subagents.
+
 ## Steps
 
 1. **Partition Survey Scope**:
@@ -24,7 +32,7 @@ Execute a comprehensive, read-only multi-agent survey of the codebase to establi
 2. **Create Dispatch Files**:
    Write `.agents/teamwork/explorer_survey_N/DISPATCH.md` for each explorer defining its exact investigation scope.
 3. **Spawn Parallel Explorers**:
-   Spawn `teamwork:explorer` subagents in parallel to investigate their assigned domains and produce `analysis.md` and 5-Component `handoff.md`.
+   Dispatch the parallel explorers (via `.agents/teamwork/workflow.py --mode survey`, `devin_session_create`, or `teamwork:explorer`) to investigate their assigned domains and produce `analysis.md` and 5-Component `handoff.md`.
 4. **Synthesize `PROJECT.md`**:
    Cross-check all Explorer handoff reports and write `.agents/teamwork/orchestrator_1/PROJECT.md` with:
    - `## Architecture`

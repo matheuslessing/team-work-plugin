@@ -12,11 +12,12 @@ triggers:
 
 # Teamwork Mission Status Dashboard (`/team-status`)
 
-Inspect `.agents/teamwork/` in the current repository and present a concise status dashboard:
+Run `node "${PLUGIN_ROOT}/scripts/teamwork-cli.mjs" status --workdir .` and inspect `.agents/teamwork/` in the current repository to present a concise status dashboard:
 
-1. Check `.agents/teamwork/ORIGINAL_REQUEST.md`, `.agents/teamwork/sentinel/BRIEFING.md`, `.agents/teamwork/orchestrator_1/BRIEFING.md`, `.agents/teamwork/orchestrator_1/PROJECT.md`, and `.agents/teamwork/orchestrator_1/GATE_STATUS.md`.
+1. Check `.agents/teamwork/RUNTIME_ENV.md`, `.agents/teamwork/ORIGINAL_REQUEST.md`, `.agents/teamwork/sentinel/BRIEFING.md`, `.agents/teamwork/orchestrator_1/BRIEFING.md`, `.agents/teamwork/orchestrator_1/PROJECT.md`, and `.agents/teamwork/orchestrator_1/GATE_STATUS.md`.
 2. Scan all `<agent_id>/BRIEFING.md`, `progress.md`, and `handoff.md` files under `.agents/teamwork/`.
 3. Present:
+   - **Detected Runtime & Active Engine** (`DEVIN_CLOUD` [`.agents/teamwork/workflow.py` / Managed Devins] vs `DEVIN_CLI_LOCAL` [Custom CLI Subagents])
    - **Mission & Integrity Mode**
    - **Current Phase & Active Orchestrator**
    - **Team Roster Table** (`Agent | Archetype | Milestone | Status | Verdict`)

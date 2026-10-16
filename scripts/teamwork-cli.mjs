@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
- * Teamwork CLI Helper for Devin CLI Plugin
+ * Teamwork CLI Helper for Devin CLI & Devin Cloud Plugin
  * Supports:
- *   node scripts/teamwork-cli.mjs init [--workdir <dir>] [--mode <development|demo|benchmark>]
- *   node scripts/teamwork-cli.mjs spawn <agent_id> <archetype> [--milestone <m>] [--workdir <dir>]
+ *   node scripts/teamwork-cli.mjs detect-env [--env <cloud|local>] [--workdir <dir>] [--copy-root-workflow]
+ *   node scripts/teamwork-cli.mjs init [--workdir <dir>] [--mode <development|demo|benchmark>] [--env <cloud|local>]
+ *   node scripts/teamwork-cli.mjs spawn <agent_id> <archetype> [--milestone <m>] [--workdir <dir>] [--worktree]
  *   node scripts/teamwork-cli.mjs validate-handoff <path-to-handoff.md>
  *   node scripts/teamwork-cli.mjs scan-integrity [--workdir <dir>] [--testdir <dir>]
  *   node scripts/teamwork-cli.mjs check-gate [--workdir <dir>]
@@ -13,6 +14,11 @@
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const pluginRoot = path.resolve(__dirname, '..');
 
 const args = process.argv.slice(2);
 const command = args[0] || 'status';
@@ -46,25 +52,179 @@ function writeIfMissing(filePath, content) {
   return false;
 }
 
+function detectEnvironment() {
+  const explicitFlag = getFlag('--env', '').toLowerCase();
+  const envOverride = (process.env.TEAMWORK_RUNTIME || '').toLowerCase();
+  const runtimeJsonPath = path.join(teamworkRoot, 'RUNTIME_ENV.json');
+
+  const signals = [];
+  let pinnedRuntime = '';
+
+  if (!explicitFlag && fs.existsSync(runtimeJsonPath)) {
+    try {
+      const saved = JSON.parse(fs.readFileSync(runtimeJsonPath, 'utf8'));
+      if (saved.pinned && saved.runtime) {
+        pinnedRuntime = saved.runtime;
+        signals.push(`pinned_in_RUNTIME_ENV.json(${saved.runtime})`);
+      }
+    } catch {
+      // ignore invalid JSON
+    }
+  }
+
+  let hasDevinPythonSdk = false;
+  try {
+    execSync('python3 -c "import devin"', { stdio: 'pipe', timeout: 2500 });
+    hasDevinPythonSdk = true;
+    signals.push('python3_import_devin');
+  } catch {
+    // devin python package not installed in global python3
+  }
+
+  const cloudEnvVars = [
+    'DEVIN_CLOUD',
+    'DEVIN_SESSION_ID',
+    'DEVIN_VM',
+    'DEVIN_ORG_ID',
+    'DEVIN_WORKFLOW',
+    'DEVIN_ENVIRONMENT'
+  ];
+  for (const key of cloudEnvVars) {
+    if (process.env[key]) {
+      signals.push(`env:${key}`);
+    }
+  }
+
+  const isLinuxUbuntuVm =
+    process.platform === 'linux' &&
+    (fs.existsSync('/home/ubuntu') || process.env.USER === 'ubuntu' || process.env.USER === 'devin');
+  if (isLinuxUbuntuVm) {
+    signals.push('linux_cloud_vm(/home/ubuntu)');
+  }
+
+  let runtime = 'DEVIN_CLI_LOCAL';
+  let pinned = false;
+
+  if (explicitFlag === 'cloud' || explicitFlag === 'devin_cloud') {
+    runtime = 'DEVIN_CLOUD';
+    pinned = true;
+    signals.push('flag:--env=cloud');
+  } else if (explicitFlag === 'local' || explicitFlag === 'cli' || explicitFlag === 'devin_cli_local') {
+    runtime = 'DEVIN_CLI_LOCAL';
+    pinned = true;
+    signals.push('flag:--env=local');
+  } else if (envOverride === 'cloud' || envOverride === 'devin_cloud') {
+    runtime = 'DEVIN_CLOUD';
+    signals.push('env:TEAMWORK_RUNTIME=cloud');
+  } else if (envOverride === 'local' || envOverride === 'cli') {
+    runtime = 'DEVIN_CLI_LOCAL';
+    signals.push('env:TEAMWORK_RUNTIME=local');
+  } else if (pinnedRuntime) {
+    runtime = pinnedRuntime;
+  } else if (signals.length > 0) {
+    runtime = 'DEVIN_CLOUD';
+  } else {
+    signals.push(`platform:${process.platform}_local_cli`);
+  }
+
+  const workflowTarget = path.join(teamworkRoot, 'workflow.py');
+  const isCloud = runtime === 'DEVIN_CLOUD';
+
+  return {
+    runtime,
+    pinned,
+    signals,
+    hasDevinPythonSdk,
+    workflowPath: workflowTarget,
+    primaryEngine: isCloud
+      ? 'Devin Dynamic Workflow (.agents/teamwork/workflow.py -> full | quick | survey | gate)'
+      : 'Devin CLI Custom Subagents (teamwork:sentinel, teamwork:orchestrator, teamwork:explorer, teamwork:test-writer, teamwork:worker, teamwork:reviewer, teamwork:challenger, teamwork:forensic-auditor, teamwork:victory-auditor)',
+    fallbackEngine: isCloud
+      ? 'Managed Devins / Devin MCP (devin_session_create + devin_session_interact + devin_session_gather + devin_schedule_manage)'
+      : 'Local Git Worktrees (node scripts/teamwork-cli.mjs spawn <id> <role> --worktree)'
+  };
+}
+
+function persistRuntimeAndProvisionWorkflow(envInfo, persistFiles = true) {
+  const sourceWorkflow = path.join(pluginRoot, 'skills', 'team-cloud-workflow', 'workflow.py');
+
+  if (persistFiles) {
+    ensureDir(teamworkRoot);
+
+    if ((envInfo.runtime === 'DEVIN_CLOUD' || hasFlag('--provision-workflow')) && fs.existsSync(sourceWorkflow)) {
+      fs.copyFileSync(sourceWorkflow, envInfo.workflowPath);
+      if (hasFlag('--copy-root-workflow')) {
+        fs.copyFileSync(sourceWorkflow, path.join(workdir, 'workflow.py'));
+      }
+    }
+
+    fs.writeFileSync(
+      path.join(teamworkRoot, 'RUNTIME_ENV.json'),
+      JSON.stringify({ ...envInfo, updatedAt: nowIso }, null, 2),
+      'utf8'
+    );
+
+    const runtimeMd = `# Teamwork Runtime Environment — ${nowIso}
+
+- **Detected Runtime**: \`${envInfo.runtime}\`${envInfo.pinned ? ' (pinned override)' : ''}
+- **Detection Signals**: ${envInfo.signals.map((s) => `\`${s}\``).join(', ')}
+- **Primary Orchestration Engine**: ${envInfo.primaryEngine}
+- **Fallback / Companion Engine**: ${envInfo.fallbackEngine}
+- **Provisioned Cloud Workflow**: \`${fs.existsSync(envInfo.workflowPath) ? envInfo.workflowPath : 'not provisioned (CLI local)'}\`
+
+## Mandatory Execution Directive
+${
+  envInfo.runtime === 'DEVIN_CLOUD'
+    ? `1. **DO NOT wait for the user to remind you to use workflow.py or Managed Devins.**
+2. **Primary Path (Dynamic Workflow)**: Execute \`.agents/teamwork/workflow.py\` using \`--mode full\` (for \`/team-run\`, \`/team-craft\`), \`--mode quick\` (for \`/team-quick\`), \`--mode survey\` (for \`/team-survey\`), or \`--mode gate\` (for \`/team-gate\`, \`/team-audit\`). Copy \`.agents/teamwork/workflow.py\` to \`./workflow.py\` only if the workflow runner requires root placement.
+3. **Automatic Fallback (Managed Devins)**: If the Dynamic Workflow runner is not active in this session, immediately dispatch parallel child Devin sessions via \`devin_session_create\` + \`devin_session_gather\` (and set a cron heartbeat via \`devin_schedule_manage\`).`
+    : `1. **Local CLI Mode Active**: Dispatch subagents using the custom profiles in \`agents/*.md\` (\`teamwork:sentinel\`, \`teamwork:orchestrator\`, \`teamwork:explorer\`, \`teamwork:test-writer\`, \`teamwork:worker\`, \`teamwork:reviewer\`, \`teamwork:challenger\`, \`teamwork:forensic-auditor\`, \`teamwork:victory-auditor\`).
+2. **Worktree Isolation**: Use \`node "${path.join(pluginRoot, 'scripts', 'teamwork-cli.mjs')}" spawn <agent_id> <archetype> --milestone <M> --worktree\` when branch isolation is desired.`
+}
+`;
+    fs.writeFileSync(path.join(teamworkRoot, 'RUNTIME_ENV.md'), runtimeMd, 'utf8');
+  }
+}
+
+function cmdDetectEnv() {
+  const envInfo = detectEnvironment();
+  const shouldPersist = !hasFlag('--no-write');
+  persistRuntimeAndProvisionWorkflow(envInfo, shouldPersist);
+
+  console.log(`[TEAMWORK RUNTIME AUTO-DETECTED: ${envInfo.runtime}]`);
+  console.log(`- Signals: ${envInfo.signals.join(', ')}`);
+  console.log(`- Primary Engine: ${envInfo.primaryEngine}`);
+  console.log(`- Fallback Engine: ${envInfo.fallbackEngine}`);
+  if (envInfo.runtime === 'DEVIN_CLOUD') {
+    console.log(`- Provisioned Workflow: ${envInfo.workflowPath}`);
+    console.log(
+      `ACTION REQUIRED: Automatically run Dynamic Workflow (.agents/teamwork/workflow.py --mode <full|quick|survey|gate>) or fallback to Managed Devins (devin_session_create / devin_session_gather) WITHOUT asking the user.`
+    );
+  }
+}
+
 function cmdInit() {
   const mode = getFlag('--mode', 'development');
+  const envInfo = detectEnvironment();
   ensureDir(teamworkRoot);
   ensureDir(path.join(teamworkRoot, 'sentinel'));
   ensureDir(path.join(teamworkRoot, 'orchestrator_1'));
 
+  persistRuntimeAndProvisionWorkflow(envInfo, true);
+
   writeIfMissing(
     path.join(teamworkRoot, 'ORIGINAL_REQUEST.md'),
-    `# Original User Request\n\n## Initial Request — ${nowIso}\n\n[Project description]\n\nWorking directory: ${workdir}\nIntegrity mode: ${mode}\n\n## Requirements\n\n### R1. [Requirement 1]\n\n## Acceptance Criteria\n\n### Core Criteria\n- [ ] [Objective, checkable condition]\n`
+    `# Original User Request\n\n## Initial Request — ${nowIso}\n\n[Project description]\n\nWorking directory: ${workdir}\nRuntime environment: ${envInfo.runtime}\nIntegrity mode: ${mode}\n\n## Requirements\n\n### R1. [Requirement 1]\n\n## Acceptance Criteria\n\n### Core Criteria\n- [ ] [Objective, checkable condition]\n`
   );
 
   writeIfMissing(
     path.join(teamworkRoot, 'sentinel', 'BRIEFING.md'),
-    `# BRIEFING — ${nowIso}\n\n## Mission\nSupervise end-to-end execution of the project via project orchestrator and mandatory victory auditor.\n\n## 🔒 My Identity\n- Archetype: sentinel\n- Working directory: ${path.join(teamworkRoot, 'sentinel')}\n- Orchestrator: orchestrator_1\n- Victory Auditor: to be spawned on victory claim\n\n## 🔒 Key Constraints\n- No technical decisions — relay only\n- Victory Audit is MANDATORY before reporting completion\n- Must not write production code\n\n## Victory Audit Status\n- **Triggered**: no\n- **Verdict**: pending\n- **Retry count**: 0\n`
+    `# BRIEFING — ${nowIso}\n\n## Mission\nSupervise end-to-end execution of the project via project orchestrator and mandatory victory auditor.\n\n## 🔒 My Identity\n- Archetype: sentinel\n- Runtime environment: ${envInfo.runtime}\n- Primary Engine: ${envInfo.primaryEngine}\n- Working directory: ${path.join(teamworkRoot, 'sentinel')}\n- Orchestrator: orchestrator_1\n- Victory Auditor: to be spawned on victory claim\n\n## 🔒 Key Constraints\n- No technical decisions — relay only\n- Victory Audit is MANDATORY before reporting completion\n- Must not write production code\n\n## Victory Audit Status\n- **Triggered**: no\n- **Verdict**: pending\n- **Retry count**: 0\n`
   );
 
   writeIfMissing(
     path.join(teamworkRoot, 'orchestrator_1', 'BRIEFING.md'),
-    `# BRIEFING — ${nowIso}\n\n## Mission\nOrchestrate the project ensuring 100% acceptance criteria pass.\n\n## 🔒 My Identity\n- Archetype: orchestrator\n- Roles: orchestrator, user_liaison, human_reporter, successor\n- Working directory: ${path.join(teamworkRoot, 'orchestrator_1')}\n- Original parent: Sentinel\n\n## 🔒 My Workflow\n- **Pattern**: Project Pattern (Dual Track: Implementation Track + E2E Testing Track)\n- **Scope document**: ${path.join(teamworkRoot, 'orchestrator_1', 'PROJECT.md')}\n- **Work items**:\n  1. Phase 0: Survey and Scope Mapping [in-progress]\n  2. E2E Testing Track Setup [pending]\n  3. Implementation Milestones [pending]\n  4. Final Milestone E2E, Adversarial Hardening & Forensic Audit [pending]\n\n## 🔒 Key Constraints\n- Dispatch-only orchestrator: NEVER write source code, delegate all investigation/code/testing.\n- Zero tolerance for cheating/integrity violations (Auditor has binary veto).\n- Never reuse a subagent after it has delivered its handoff — always spawn fresh.\n\n## Team Roster\n| Agent | Type | Work Item | Status |\n|-------|------|-----------|--------|\n`
+    `# BRIEFING — ${nowIso}\n\n## Mission\nOrchestrate the project ensuring 100% acceptance criteria pass.\n\n## 🔒 My Identity\n- Archetype: orchestrator\n- Runtime environment: ${envInfo.runtime}\n- Primary Engine: ${envInfo.primaryEngine}\n- Fallback Engine: ${envInfo.fallbackEngine}\n- Roles: orchestrator, user_liaison, human_reporter, successor\n- Working directory: ${path.join(teamworkRoot, 'orchestrator_1')}\n- Original parent: Sentinel\n\n## 🔒 My Workflow\n- **Pattern**: Project Pattern (Dual Track: Implementation Track + E2E Testing Track)\n- **Scope document**: ${path.join(teamworkRoot, 'orchestrator_1', 'PROJECT.md')}\n- **Cloud Workflow**: ${path.join(teamworkRoot, 'workflow.py')}\n- **Work items**:\n  1. Phase 0: Survey and Scope Mapping [in-progress]\n  2. E2E Testing Track Setup [pending]\n  3. Implementation Milestones [pending]\n  4. Final Milestone E2E, Adversarial Hardening & Forensic Audit [pending]\n\n## 🔒 Key Constraints\n- Dispatch-only orchestrator: NEVER write source code, delegate all investigation/code/testing.\n- Zero tolerance for cheating/integrity violations (Auditor has binary veto).\n- Never reuse a subagent after it has delivered its handoff — always spawn fresh.\n\n## Team Roster\n| Agent | Type | Work Item | Status |\n|-------|------|-----------|--------|\n`
   );
 
   writeIfMissing(
@@ -78,6 +238,10 @@ function cmdInit() {
   );
 
   console.log(`Initialized Teamwork workspace at: ${teamworkRoot}`);
+  console.log(`Detected Runtime: ${envInfo.runtime} (${envInfo.primaryEngine})`);
+  if (fs.existsSync(envInfo.workflowPath)) {
+    console.log(`Provisioned Cloud Dynamic Workflow at: ${envInfo.workflowPath}`);
+  }
 }
 
 function cmdSpawn() {
@@ -85,6 +249,7 @@ function cmdSpawn() {
   const archetype = args[2] || 'worker';
   const milestone = getFlag('--milestone', 'TBD');
   const useWorktree = hasFlag('--worktree');
+  const envInfo = detectEnvironment();
 
   if (!agentId) {
     console.error('Usage: teamwork-cli.mjs spawn <agent_id> <archetype> [--milestone <m>] [--worktree]');
@@ -110,20 +275,20 @@ function cmdSpawn() {
 
   writeIfMissing(
     path.join(agentDir, 'DISPATCH.md'),
-    `## ${nowIso}\nFrom: orchestrator_1\nPriority: MESSAGE_PRIORITY_HIGH\n\nYou are assigned as \`${agentId}\` (Archetype: \`${archetype}\`) for Milestone: ${milestone}.\nYour working directory is: ${agentDir}${worktreeInfo}\nOriginal request: ${path.join(teamworkRoot, 'ORIGINAL_REQUEST.md')}\nProject architecture & contracts: ${path.join(teamworkRoot, 'orchestrator_1', 'PROJECT.md')}\n\n### Exclusive Write Ownership\n- ${agentDir}\n`
+    `## ${nowIso}\nFrom: orchestrator_1\nPriority: MESSAGE_PRIORITY_HIGH\nRuntime: ${envInfo.runtime}\n\nYou are assigned as \`${agentId}\` (Archetype: \`${archetype}\`) for Milestone: ${milestone}.\nYour working directory is: ${agentDir}${worktreeInfo}\nOriginal request: ${path.join(teamworkRoot, 'ORIGINAL_REQUEST.md')}\nProject architecture & contracts: ${path.join(teamworkRoot, 'orchestrator_1', 'PROJECT.md')}\n\n### Exclusive Write Ownership\n- ${agentDir}\n`
   );
 
   writeIfMissing(
     path.join(agentDir, 'BRIEFING.md'),
-    `# BRIEFING — ${nowIso}\n\n## Mission\n[Define mission for ${agentId}]\n\n## 🔒 My Identity\n- Archetype: ${archetype}\n- Working directory: ${agentDir}${worktreeInfo}\n- Original parent: orchestrator_1\n- Milestone: ${milestone}\n\n## 🔒 Key Constraints\n- Adhere strictly to write boundaries in DISPATCH.md\n- MANDATORY INTEGRITY MANDATE: Genuine logic only, no hardcoded test shortcuts, no facades\n\n## Key Decisions Made\n- [Pending]\n\n## Artifact Index\n- ${path.join(agentDir, 'DISPATCH.md')}\n- ${path.join(agentDir, 'BRIEFING.md')}\n- ${path.join(agentDir, 'progress.md')}\n- ${path.join(agentDir, 'handoff.md')}\n`
+    `# BRIEFING — ${nowIso}\n\n## Mission\n[Define mission for ${agentId}]\n\n## 🔒 My Identity\n- Archetype: ${archetype}\n- Runtime: ${envInfo.runtime}\n- Working directory: ${agentDir}${worktreeInfo}\n- Original parent: orchestrator_1\n- Milestone: ${milestone}\n\n## 🔒 Key Constraints\n- Adhere strictly to write boundaries in DISPATCH.md\n- MANDATORY INTEGRITY MANDATE: Genuine logic only, no hardcoded test shortcuts, no facades\n\n## Key Decisions Made\n- [Pending]\n\n## Artifact Index\n- ${path.join(agentDir, 'DISPATCH.md')}\n- ${path.join(agentDir, 'BRIEFING.md')}\n- ${path.join(agentDir, 'progress.md')}\n- ${path.join(agentDir, 'handoff.md')}\n`
   );
 
   writeIfMissing(
     path.join(agentDir, 'progress.md'),
-    `# Progress — ${agentId}\n\n- [${nowIso}] Initialized workspace for ${agentId} (${archetype}).\n`
+    `# Progress — ${agentId}\n\n- [${nowIso}] Initialized workspace for ${agentId} (${archetype}) under ${envInfo.runtime}.\n`
   );
 
-  console.log(`Spawned workspace for ${agentId} (${archetype}) at: ${agentDir}${worktreeInfo}`);
+  console.log(`Spawned workspace for ${agentId} (${archetype}) [${envInfo.runtime}] at: ${agentDir}${worktreeInfo}`);
 }
 
 function cmdValidateHandoff() {
@@ -251,13 +416,23 @@ function cmdCheckGate() {
 }
 
 function cmdStatus() {
+  const envInfo = detectEnvironment();
+  console.log('# Teamwork Mission Dashboard\n');
+  console.log(`- **Active Runtime**: \`${envInfo.runtime}\` (${envInfo.signals.join(', ')})`);
+  console.log(`- **Primary Engine**: ${envInfo.primaryEngine}`);
+  console.log(`- **Fallback Engine**: ${envInfo.fallbackEngine}`);
+  console.log(
+    `- **Cloud Workflow (\`.agents/teamwork/workflow.py\`)**: ${
+      fs.existsSync(envInfo.workflowPath) ? '✅ Provisioned' : '— Not provisioned'
+    }\n`
+  );
+
   if (!fs.existsSync(teamworkRoot)) {
     console.log(`No active Teamwork workspace found at ${teamworkRoot}.`);
-    console.log('Run `/teamwork:craft` or `node scripts/teamwork-cli.mjs init` to start.');
+    console.log('Run `/team-craft` or `node scripts/teamwork-cli.mjs init` to start.');
     return;
   }
 
-  console.log('# Teamwork Mission Dashboard\n');
   const entries = fs.readdirSync(teamworkRoot, { withFileTypes: true }).filter((e) => e.isDirectory());
 
   console.log('| Agent Workspace | BRIEFING | DISPATCH | Progress | Handoff |');
@@ -279,6 +454,9 @@ function cmdStatus() {
 }
 
 switch (command) {
+  case 'detect-env':
+    cmdDetectEnv();
+    break;
   case 'init':
     cmdInit();
     break;

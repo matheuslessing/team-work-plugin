@@ -15,7 +15,12 @@ triggers:
 
 # Teamwork Track A — 4-Tier E2E Testing Track (`/team-test-track`)
 
-Design and implement the project's independent, requirement-driven 4-Tier E2E Test Suite (spawn `teamwork:test-writer` in Devin CLI, a Managed Devin session in Devin Cloud, or execute the Track A protocol directly):
+## Step 0: Automatic Runtime Detection (No User Reminder Needed)
+Run `node "${PLUGIN_ROOT}/scripts/teamwork-cli.mjs" detect-env --workdir .` first:
+- **In `DEVIN_CLOUD`**: Spawn a dedicated `test_writer_1` session via Dynamic Workflow (`.agents/teamwork/workflow.py`) or **Managed Devins** (`devin_session_create` + `devin_session_gather`).
+- **In `DEVIN_CLI_LOCAL`**: Spawn the `teamwork:test-writer` custom subagent.
+
+## Steps
 
 1. Read `.agents/teamwork/ORIGINAL_REQUEST.md` and `.agents/teamwork/orchestrator_1/PROJECT.md` (especially `§ Feature Inventory` and `§ Interface Contracts`).
 2. Initialize `.agents/teamwork/test_writer_1/BRIEFING.md` and `progress.md`.

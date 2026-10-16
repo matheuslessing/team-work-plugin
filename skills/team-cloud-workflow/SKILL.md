@@ -22,23 +22,26 @@ In **Devin Cloud** (or when connected to the **Devin MCP Server** `https://mcp.d
 
 ---
 
-## Execution Modes in Devin Cloud
+## Execution Modes in Devin Cloud (Automatic Priority Order)
 
-### Mode A: Deterministic Dynamic Workflow (`workflow.py`)
-Use the bundled [`workflow.py`](./workflow.py) template as the basis for your Dynamic Workflow run:
-1. Read `.agents/teamwork/ORIGINAL_REQUEST.md`.
-2. Customize `REPO` and `MILESTONES` in `workflow.py` (or run `workflow.py` directly in the Devin Cloud workflow runner).
-3. The workflow executes:
-   - **Phase 0 (`survey`)**: Parallel `agent()` calls for 3 Explorers $\to$ synthesizes `PROJECT.md` and interface contracts.
-   - **Phase 1 (`dual_track`)**: `parallel()` execution of Track A (`test_writer` building Tiers 1–4 E2E tests) + Track B (`worker` sessions implementing each Milestone).
-   - **Phase 2 (`gate_verification`)**: `parallel()` execution of `reviewer`, `challenger`, and `forensic_auditor` returning structured JSON verdicts (`APPROVE`/`REQUEST_CHANGES` and `CLEAN`/`INTEGRITY_VIOLATION`).
-   - **Phase 3 (`remediation`)**: Deterministic `while` loop (up to `MAX_GATE_ITERATIONS`) that automatically spawns a remediation worker and re-runs the Gate if ANY check fails.
-   - **Phase 4 (`victory_audit`)**: Final independent `victory_auditor` check before completing.
+### 1. Primary Engine: Deterministic Dynamic Workflow (`.agents/teamwork/workflow.py`)
+`node "${PLUGIN_ROOT}/scripts/teamwork-cli.mjs" init` (or `detect-env`) automatically provisions `.agents/teamwork/workflow.py` so the project root stays clean (copy to `./workflow.py` only if the workflow runner requires root placement).
 
-### Mode B: Managed Devins Coordinator (`devin_session_*`)
-When orchestrating interactively via Managed Devins:
+It supports all 4 Teamwork workflow modes via `--mode <full|quick|survey|gate>` (or `TEAMWORK_WORKFLOW_MODE`):
+- **`--mode full`** (`/team-run`, `/team-craft`):
+  - **Phase 0 (`survey`)**: Parallel `agent()` calls for 3 Explorers $\to$ synthesizes `PROJECT.md` and interface contracts.
+  - **Phase 1 (`dual_track`)**: `parallel()` execution of Track A (`test_writer` building Tiers 1–4 E2E tests) + Track B (`worker` sessions implementing each Milestone).
+  - **Phase 2 (`gate_verification`)**: `parallel()` execution of `reviewer`, `challenger`, and `forensic_auditor` returning structured JSON verdicts (`APPROVE`/`REQUEST_CHANGES` and `CLEAN`/`INTEGRITY_VIOLATION`).
+  - **Phase 3 (`remediation`)**: Deterministic loop (up to 3 iterations) that automatically spawns a remediation worker and re-runs the Gate if ANY check fails.
+  - **Phase 4 (`victory_audit`)**: Final independent `victory_auditor` check before completing.
+- **`--mode quick`** (`/team-quick`): `1 Worker -> Parallel Reviewer + Forensic Auditor loop`.
+- **`--mode survey`** (`/team-survey`): `3 Parallel Explorers -> Orchestrator PROJECT.md synthesis`.
+- **`--mode gate`** (`/team-gate`, `/team-audit`): `Parallel Reviewer + Challenger + Forensic Auditor -> GATE_STATUS.md`.
+
+### 2. Automatic Fallback Engine: Managed Devins Coordinator (`devin_session_*`)
+If the Dynamic Workflow SDK/runner is not active in the current session, automatically fall back to **Managed Devins** without asking the user:
 1. Act as **Sentinel / Coordinator**.
 2. Call `devin_session_create` to launch parallel child sessions for Explorers, Test Writer, and Milestone Workers, passing the role rules from `agents/<role>.md` in each session's prompt.
 3. Schedule a liveness check using `devin_schedule_manage` (or self-scheduled reminder).
-4. Call `devin_session_gather` to await completion without polling.
+4. Call `devin_session_gather` to await completion reactively without polling.
 5. Use `devin_session_interact` to send mid-flight clarifications or remediation instructions.

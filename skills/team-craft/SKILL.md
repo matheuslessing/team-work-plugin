@@ -121,12 +121,17 @@ Present the final `prompt_draft.md` to the user and set status to `Ready for lau
 
 ---
 
-## Delegation Protocol (On User Approval)
+## Delegation Protocol (On User Approval — Automatic Runtime Detection)
 
 When the user approves (`"go"`, `"looks good"`, `"launch"`, `"pode rodar"`, `"aprovo"`):
 1. Copy the approved prompt from `.agents/teamwork/prompt_draft.md` to `.agents/teamwork/ORIGINAL_REQUEST.md` with an ISO timestamp header.
-2. Run the helper script to initialize the workspace folders:
-   `node "${PLUGIN_ROOT}/scripts/teamwork-cli.mjs" init --workdir .` (or create `.agents/teamwork/sentinel/` and `.agents/teamwork/orchestrator_1/`).
-3. Launch the selected team pipeline:
-   - **In Devin CLI**: Spawn `teamwork:sentinel` (or invoke `/team-run` for full team, `/team-quick` for small team).
-   - **In Devin Cloud**: Execute the `/team-run` (or `/team-quick`) workflow directly using Managed Devins (`devin_session_create` + `devin_session_gather`), Cloud subagents, or `/team-cloud-workflow`.
+2. Run the helper script to initialize the workspace folders, detect the runtime (`DEVIN_CLOUD` vs `DEVIN_CLI_LOCAL`), and auto-provision `.agents/teamwork/workflow.py` when in Cloud:
+   ```bash
+   node "${PLUGIN_ROOT}/scripts/teamwork-cli.mjs" init --workdir .
+   ```
+3. **Launch Automatically Based on Detected Runtime (DO NOT wait for the user to remind you)**:
+   - **If `DEVIN_CLOUD` is detected**:
+     1. **Primary Cloud Engine**: Immediately execute `.agents/teamwork/workflow.py --mode full` (or `--mode quick` if the user chose the Small Focused Team). Copy `.agents/teamwork/workflow.py` to `./workflow.py` only if the runner requires root placement.
+     2. **Automatic Fallback**: If the Dynamic Workflow runner is not active in the current session, immediately spawn parallel child Devin sessions via **Managed Devins** (`devin_session_create` + `devin_session_gather` + `devin_schedule_manage`).
+   - **If `DEVIN_CLI_LOCAL` is detected**:
+     - Spawn the **`teamwork:sentinel`** subagent (or invoke `/team-run` for full team, `/team-quick` for small team) passing the full text of `ORIGINAL_REQUEST.md`.

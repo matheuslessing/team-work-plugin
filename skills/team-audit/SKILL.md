@@ -14,7 +14,12 @@ triggers:
 
 # Teamwork Forensic Integrity Audit (`/team-audit`)
 
-Perform an exhaustive, zero-trust Forensic Integrity Audit of the project's production code, configurations, test suites, and test runners (spawn `teamwork:forensic-auditor` in Devin CLI, a Managed Devin session in Devin Cloud, or execute the 4-phase audit directly):
+## Step 0: Automatic Runtime Detection (No User Reminder Needed)
+Run `node "${PLUGIN_ROOT}/scripts/teamwork-cli.mjs" detect-env --workdir .` first:
+- **In `DEVIN_CLOUD`**: Execute `.agents/teamwork/workflow.py --mode gate` or spawn an independent `auditor_1` session via **Managed Devins** (`devin_session_create` + `devin_session_gather`).
+- **In `DEVIN_CLI_LOCAL`**: Spawn the `teamwork:forensic-auditor` custom subagent.
+
+## Steps
 
 1. Initialize `.agents/teamwork/auditor_1/BRIEFING.md` and `progress.md`.
 2. Run the automated integrity scanner helper if available:

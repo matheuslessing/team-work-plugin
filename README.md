@@ -93,23 +93,25 @@ All skills are prefixed with `team-` so they group cleanly in the `/` autocomple
 
 ---
 
-## Devin Cloud 100% Parity (`workflow.py` & Managed Devins)
+## Automatic Runtime Detection (`DEVIN_CLOUD` vs `DEVIN_CLI_LOCAL`)
 
-In **Devin Cloud**, `skills/team-cloud-workflow/workflow.py` and **Managed Devins / Devin MCP** unlock the remaining runtime capabilities natively:
-- **Deterministic Dynamic Workflow (`workflow.py`)**: Uses `@register_workflow`, `await parallel(...)`, and `await agent(...)` with strict JSON Schema output validation to orchestrate parallel Cloud VMs across Phase 0 Survey, Track A + Track B, Gate Verification, Remediation Loops, and Victory Audit.
-- **Async P2P Messaging & Reactive Wakeup**: Uses `devin_session_create`, `devin_session_interact`, and `devin_session_gather` so the Coordinator can message running child sessions in real time and wake up reactively when children complete.
-- **Scheduled Crons & Heartbeats**: Uses `devin_schedule_manage` (`*/8 * * * *`) for recurring Sentinel/Orchestrator liveness heartbeats.
-- **Local Git Worktree Isolation**: Locally in Devin CLI, `node scripts/teamwork-cli.mjs spawn worker_m1 implementer --milestone M1 --worktree` creates an isolated git worktree (`worktrees/worker_m1` on branch `teamwork/worker_m1`) and symlinks `.agents/teamwork/` so parallel workers never collide on disk.
+You never have to remind Devin Cloud that it can use `workflow.py` or Managed Devins. Detection happens automatically in 4 layers:
+1. **`UserPromptSubmit` Hook (`hooks.json`)**: On every prompt, inspects environment variables (`DEVIN_CLOUD`, `DEVIN_SESSION_ID`, `DEVIN_VM`, `DEVIN_ORG_ID`, `TEAMWORK_RUNTIME`), `/home/ubuntu` Cloud VM markers, and `.agents/teamwork/RUNTIME_ENV.json` to inject the active runtime directive directly into the model's context.
+2. **Always-On Rule (`rules/runtime-detection.md`)**: Loaded into the system prompt of every session, instructing Devin Cloud to prioritize `.agents/teamwork/workflow.py` (`--mode full|quick|survey|gate`) and automatically fall back to **Managed Devins** (`devin_session_create` + `devin_session_gather` + `devin_schedule_manage`) if the workflow runner is not active.
+3. **Mandatory `Step 0` in all `/team-*` Skills**: Every skill executes `teamwork-cli.mjs init` or `detect-env` first, provisioning `.agents/teamwork/workflow.py` automatically when in Cloud (keeping the project root clean unless root placement is required).
+4. **CLI Detector & Override (`scripts/teamwork-cli.mjs detect-env`)**: Supports automatic detection plus manual pinning (`--env cloud` or `--env local`), and displays the active runtime in `/team-status` and all `BRIEFING.md` files.
 
 ---
 
 ## Lifecycle Hooks & CLI Utility
 
-- **`PostCompaction` Hook (`hooks.json`)**: Automatically re-injects `ORIGINAL_REQUEST.md`, `BRIEFING.md`, `PROJECT.md`, and `GATE_STATUS.md` into the agent's context whenever context compaction occurs.
+- **`UserPromptSubmit` Hook (`hooks.json`)**: Automatically detects `DEVIN_CLOUD` vs `DEVIN_CLI_LOCAL` and injects the exact orchestration engine instructions before the agent responds.
+- **`PostCompaction` Hook (`hooks.json`)**: Automatically re-injects `RUNTIME_ENV.md`, `ORIGINAL_REQUEST.md`, `BRIEFING.md`, `PROJECT.md`, and `GATE_STATUS.md` into the agent's context whenever context compaction occurs.
 - **`Stop` Hook (`hooks.json`)**: Warns if an orchestrator attempts to stop while `GATE_STATUS.md` still reports `FAIL` on an in-progress mission.
-- **`scripts/teamwork-cli.mjs`**: Zero-dependency Node.js helper for workspace initialization, isolated git worktree creation, 5-Component `handoff.md` validation, static forensic integrity scanning, and status reporting:
+- **`scripts/teamwork-cli.mjs`**: Zero-dependency Node.js helper for runtime auto-detection, `.agents/teamwork/workflow.py` provisioning, workspace initialization, isolated git worktree creation, 5-Component `handoff.md` validation, static forensic integrity scanning, and status reporting:
   ```bash
-  node scripts/teamwork-cli.mjs init
+  node scripts/teamwork-cli.mjs detect-env [--env cloud|local]
+  node scripts/teamwork-cli.mjs init [--env cloud|local]
   node scripts/teamwork-cli.mjs spawn worker_m1 implementer --milestone M1 --worktree
   node scripts/teamwork-cli.mjs validate-handoff .agents/teamwork/worker_m1/handoff.md
   node scripts/teamwork-cli.mjs scan-integrity

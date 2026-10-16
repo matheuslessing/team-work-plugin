@@ -85,15 +85,20 @@ Every subagent (`explorer`, `test-writer`, `worker`, `reviewer`, `challenger`, `
 
 ---
 
-## 5. Dual-Runtime Compatibility (Devin CLI & Devin Cloud)
+## 5. Automatic Runtime Detection (`DEVIN_CLOUD` vs `DEVIN_CLI_LOCAL`)
 
-All `/team-*` commands work seamlessly in **both** **Devin CLI** and **Devin Cloud**:
+All `/team-*` commands automatically detect whether they are running in **Devin Cloud** or **Devin CLI Local** via `rules/runtime-detection.md`, the `UserPromptSubmit` hook in `hooks.json`, and `node "${PLUGIN_ROOT}/scripts/teamwork-cli.mjs" detect-env` (with manual override `--env cloud|local` or `TEAMWORK_RUNTIME=cloud|local`). **Never wait for the user to remind you to use `workflow.py` or Managed Devins in Devin Cloud.**
 
-1. **In Devin CLI**:
-   - Subagents are spawned using the custom profiles in `agents/*.md` (`teamwork:sentinel`, `teamwork:orchestrator`, `teamwork:explorer`, `teamwork:test-writer`, `teamwork:worker`, `teamwork:reviewer`, `teamwork:challenger`, `teamwork:forensic-auditor`, `teamwork:victory-auditor`).
-2. **In Devin Cloud**:
-   - Every `/team-*` command (`skills/team-*/SKILL.md`), `AGENTS.md`, `rules/*.md`, and `hooks.json` is automatically synced to Devin Cloud.
-   - When dispatching subagents (`explorer`, `test-writer`, `worker`, `reviewer`, `challenger`, `forensic-auditor`, `victory-auditor`) inside a Devin Cloud session, the Orchestrator automatically uses:
-     - **Managed Devins / Devin MCP** (`devin_session_create`, `devin_session_interact`, `devin_session_gather`) if enabled, OR
-     - **Cloud Subagents / Parallel Sessions**, passing `.agents/teamwork/<agent_id>/DISPATCH.md` + `BRIEFING.md` so each agent follows its exact read/write boundary and writes its 5-Component `handoff.md`.
-   - For deterministic multi-VM Cloud orchestration, `/team-cloud-workflow` provides `skills/team-cloud-workflow/workflow.py`.
+1. **When `DEVIN_CLOUD` is Detected**:
+   - `teamwork-cli.mjs init` / `detect-env` automatically provisions `.agents/teamwork/workflow.py` (keeping the repository root clean) and writes `.agents/teamwork/RUNTIME_ENV.md`.
+   - **Primary Engine — Devin Dynamic Workflow (`.agents/teamwork/workflow.py`)**:
+     Automatically execute `.agents/teamwork/workflow.py` with the mode matching the command:
+     - `--mode full` (`/team-run`, `/team-craft`)
+     - `--mode quick` (`/team-quick`)
+     - `--mode survey` (`/team-survey`)
+     - `--mode gate` (`/team-gate`, `/team-audit`)
+     Copy `.agents/teamwork/workflow.py` to `./workflow.py` only if the active workflow runner requires root placement.
+   - **Automatic Fallback — Managed Devins (`devin_session_create`)**:
+     If the Dynamic Workflow runner is not active in the current session, immediately and automatically fall back to **Managed Devins / Devin MCP** (`devin_session_create`, `devin_session_interact`, `devin_session_gather`, `devin_schedule_manage`).
+2. **When `DEVIN_CLI_LOCAL` is Detected**:
+   - Subagents are spawned using the custom profiles in `agents/*.md` (`teamwork:sentinel`, `teamwork:orchestrator`, `teamwork:explorer`, `teamwork:test-writer`, `teamwork:worker`, `teamwork:reviewer`, `teamwork:challenger`, `teamwork:forensic-auditor`, `teamwork:victory-auditor`) and optional local git worktrees (`--worktree`).

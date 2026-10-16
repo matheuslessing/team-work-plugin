@@ -1,10 +1,21 @@
 {
+  "UserPromptSubmit": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "node -e \"const fs=require('fs'),p=require('path'),r=process.env.DEVIN_PROJECT_DIR||process.cwd(),tw=p.join(r,'.agents','teamwork'),rj=p.join(tw,'RUNTIME_ENV.json');let rt='';if(fs.existsSync(rj)){try{const d=JSON.parse(fs.readFileSync(rj,'utf8'));if(d.pinned&&d.runtime)rt=d.runtime;}catch{}}if(!rt){const ev=(process.env.TEAMWORK_RUNTIME||'').toLowerCase();if(ev==='cloud')rt='DEVIN_CLOUD';else if(ev==='local')rt='DEVIN_CLI_LOCAL';else if(process.env.DEVIN_CLOUD||process.env.DEVIN_SESSION_ID||process.env.DEVIN_VM||process.env.DEVIN_ORG_ID||(process.platform==='linux'&&(fs.existsSync('/home/ubuntu')||process.env.USER==='ubuntu'||process.env.USER==='devin')))rt='DEVIN_CLOUD';else rt='DEVIN_CLI_LOCAL';}const msg=rt==='DEVIN_CLOUD'?'[TEAMWORK AUTO-DETECTED RUNTIME: DEVIN_CLOUD] You are running in Devin Cloud. Do NOT wait for the user to remind you to use workflows. Automatically use Primary Engine: Devin Dynamic Workflow (.agents/teamwork/workflow.py with --mode full|quick|survey|gate) or Automatic Fallback: Managed Devins (devin_session_create + devin_session_gather + devin_schedule_manage).':'[TEAMWORK AUTO-DETECTED RUNTIME: DEVIN_CLI_LOCAL] You are running in Devin CLI Local. Dispatch subagents using local custom profiles (teamwork:sentinel, teamwork:orchestrator, teamwork:explorer, teamwork:test-writer, teamwork:worker, teamwork:reviewer, teamwork:challenger, teamwork:forensic-auditor, teamwork:victory-auditor).';console.log(JSON.stringify({hookSpecificOutput:{hookEventName:'UserPromptSubmit',additionalContext:msg}}));\"",
+          "timeout": 5
+        }
+      ]
+    }
+  ],
   "PostCompaction": [
     {
       "hooks": [
         {
           "type": "command",
-          "command": "node -e \"const fs=require('fs'),p=require('path'),r=process.env.DEVIN_PROJECT_DIR||process.cwd(),tw=p.join(r,'.agents','teamwork');if(fs.existsSync(tw)){const files=['ORIGINAL_REQUEST.md','sentinel/BRIEFING.md','orchestrator_1/BRIEFING.md','orchestrator_1/PROJECT.md','orchestrator_1/GATE_STATUS.md'];const ctx=files.map(f=>{const fp=p.join(tw,f);return fs.existsSync(fp)?'### '+f+'\\n'+fs.readFileSync(fp,'utf8').slice(0,3000):'';}).filter(Boolean).join('\\n\\n');if(ctx)console.log(JSON.stringify({hookSpecificOutput:{hookEventName:'PostCompaction',additionalContext:'[TEAMWORK STATE RECOVERED AFTER COMPACTION]\\n'+ctx}}));}\"",
+          "command": "node -e \"const fs=require('fs'),p=require('path'),r=process.env.DEVIN_PROJECT_DIR||process.cwd(),tw=p.join(r,'.agents','teamwork');if(fs.existsSync(tw)){const files=['RUNTIME_ENV.md','ORIGINAL_REQUEST.md','sentinel/BRIEFING.md','orchestrator_1/BRIEFING.md','orchestrator_1/PROJECT.md','orchestrator_1/GATE_STATUS.md'];const ctx=files.map(f=>{const fp=p.join(tw,f);return fs.existsSync(fp)?'### '+f+'\\n'+fs.readFileSync(fp,'utf8').slice(0,3000):'';}).filter(Boolean).join('\\n\\n');if(ctx)console.log(JSON.stringify({hookSpecificOutput:{hookEventName:'PostCompaction',additionalContext:'[TEAMWORK STATE RECOVERED AFTER COMPACTION]\\n'+ctx}}));}\"",
           "timeout": 10
         }
       ]
