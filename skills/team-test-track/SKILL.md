@@ -2,7 +2,12 @@
 name: team-test-track
 description: "[Teamwork Track A QA] Launch the independent Test Writer subagent to build a 4-tier E2E test suite, CLI test runner, TEST_INFRA.md, and TEST_READY.md."
 argument-hint: "[path to PROJECT.md or target modules]"
-agent: test-writer
+allowed-tools:
+  - read
+  - edit
+  - grep
+  - glob
+  - exec
 triggers:
   - user
   - model
@@ -10,7 +15,7 @@ triggers:
 
 # Teamwork Track A — 4-Tier E2E Testing Track (`/team-test-track`)
 
-Design and implement the project's independent, requirement-driven 4-Tier E2E Test Suite.
+Design and implement the project's independent, requirement-driven 4-Tier E2E Test Suite (spawn `teamwork:test-writer` in Devin CLI, a Managed Devin session in Devin Cloud, or execute the Track A protocol directly):
 
 1. Read `.agents/teamwork/ORIGINAL_REQUEST.md` and `.agents/teamwork/orchestrator_1/PROJECT.md` (especially `§ Feature Inventory` and `§ Interface Contracts`).
 2. Initialize `.agents/teamwork/test_writer_1/BRIEFING.md` and `progress.md`.

@@ -30,17 +30,17 @@ Create the directory tree under `.agents/teamwork/`:
 - `.agents/teamwork/sentinel/BRIEFING.md`
 - `.agents/teamwork/orchestrator_1/DISPATCH.md`
 
-## Step 3: Execute Dual-Track Orchestration (`teamwork:orchestrator`)
-Spawn `teamwork:sentinel` (or act as Sentinel and spawn `teamwork:orchestrator` directly) to run all 4 phases:
+## Step 3: Execute Dual-Track Orchestration (Devin CLI & Devin Cloud)
+Spawn `teamwork:sentinel` / `teamwork:orchestrator` (in **Devin CLI** via custom subagent profiles; in **Devin Cloud** via Managed Devins `devin_session_create` + `devin_session_gather` or Cloud subagents reading `.agents/teamwork/<id>/DISPATCH.md`) to run all 4 phases:
 
-1. **Phase 0 — Parallel Codebase Survey (`teamwork:explorer`)**:
+1. **Phase 0 — Parallel Codebase Survey (`explorer`)**:
    - Spawn 2–3 `teamwork:explorer` subagents in parallel to inspect the codebase, packages, assets, and root causes.
    - Each explorer produces `.agents/teamwork/explorer_survey_N/analysis.md` and 5-component `handoff.md`.
    - Synthesize findings into `.agents/teamwork/orchestrator_1/PROJECT.md` (Architecture, 100% Feature Inventory `F1..Fn`, Milestones `TestTrack` + `M1..Mn`, exact Interface Contracts, and Code Layout).
 
 2. **Phase 1 — Dual-Track Execution (Parallel)**:
-   - **Track A (`teamwork:test-writer`)**: Build `TEST_INFRA.md`, 4-tier E2E test suites (`Tier 1: Feature >=5`, `Tier 2: Boundary >=5`, `Tier 3: Combinatorial`, `Tier 4: Real-World Scenarios`), an authentic CLI test runner, and `TEST_READY.md`.
-   - **Track B (`teamwork:worker` Milestones `M1..Mn`)**: Dispatch parallel milestone workers with strict, non-overlapping file write ownership (`Own exclusively: [...]`) coding against `PROJECT.md § Interface Contracts`.
+   - **Track A (`test-writer`)**: Build `TEST_INFRA.md`, 4-tier E2E test suites (`Tier 1: Feature >=5`, `Tier 2: Boundary >=5`, `Tier 3: Combinatorial`, `Tier 4: Real-World Scenarios`), an authentic CLI test runner, and `TEST_READY.md`.
+   - **Track B (`worker` Milestones `M1..Mn`)**: Dispatch parallel milestone workers with strict, non-overlapping file write ownership (`Own exclusively: [...]`) coding against `PROJECT.md § Interface Contracts`.
 
 3. **Phase 2 — Verification Gate (`GATE_STATUS.md`)**:
    - Spawn in parallel:
@@ -55,5 +55,5 @@ Spawn `teamwork:sentinel` (or act as Sentinel and spawn `teamwork:orchestrator` 
      - Spawn remediation explorers/workers (`worker_remediation`) to fix all defects and replace any mock tests with authentic production-bound tests.
      - Re-run the next Gate Iteration (`Gate — Iteration K`) until 100% `APPROVE` + `🟢 CLEAN`.
 
-## Step 4: Mandatory Victory Audit (`teamwork:victory-auditor`)
+## Step 4: Mandatory Victory Audit (`victory-auditor`)
 Before reporting completion to the user, spawn `teamwork:victory-auditor` to verify every checkbox in `ORIGINAL_REQUEST.md` and confirm live test execution passes at 100%.

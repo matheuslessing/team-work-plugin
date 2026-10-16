@@ -79,7 +79,7 @@ Identify points with multiple reasonable interpretations that affect **scope** o
 - **Scope & Quality Bar**: Proof-of-concept vs polished production system.
 - **Tech Constraints**: Hard constraints on language, engine, or dependencies.
 - **Effort & Scale (Opt-in)**:
-  - If the task is a **single self-contained change** (bug fix, small feature, contained refactor), ask whether to use the **Small Focused Team** (`/teamwork:quick` — 1 implementer + adversarial review loop) or the **Full Dual-Track Team** (`/teamwork:run`).
+  - If the task is a **single self-contained change** (bug fix, small feature, contained refactor), ask whether to use the **Small Focused Team** (`/team-quick` — 1 implementer + adversarial review loop) or the **Full Dual-Track Team** (`/team-run`).
 
 ### Step 3: Determine Integrity Mode
 Ask behavioral questions (multi-select) about acceptable shortcuts:
@@ -127,4 +127,6 @@ When the user approves (`"go"`, `"looks good"`, `"launch"`, `"pode rodar"`, `"ap
 1. Copy the approved prompt from `.agents/teamwork/prompt_draft.md` to `.agents/teamwork/ORIGINAL_REQUEST.md` with an ISO timestamp header.
 2. Run the helper script to initialize the workspace folders:
    `node "${PLUGIN_ROOT}/scripts/teamwork-cli.mjs" init --workdir .` (or create `.agents/teamwork/sentinel/` and `.agents/teamwork/orchestrator_1/`).
-3. Spawn the **`teamwork:sentinel`** subagent (or invoke `/teamwork:run` for full team, `/teamwork:quick` for small team) passing the full text of `ORIGINAL_REQUEST.md`.
+3. Launch the selected team pipeline:
+   - **In Devin CLI**: Spawn `teamwork:sentinel` (or invoke `/team-run` for full team, `/team-quick` for small team).
+   - **In Devin Cloud**: Execute the `/team-run` (or `/team-quick`) workflow directly using Managed Devins (`devin_session_create` + `devin_session_gather`), Cloud subagents, or `/team-cloud-workflow`.

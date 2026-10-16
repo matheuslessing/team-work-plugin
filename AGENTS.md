@@ -82,3 +82,18 @@ Every subagent (`explorer`, `test-writer`, `worker`, `reviewer`, `challenger`, `
 - `teamwork:challenger` — Empirical stress tester and boundary/edge-case hunter (`allowed-tools: [read, grep, glob, exec]`).
 - `teamwork:forensic-auditor` — Binary integrity auditor (`allowed-tools: [read, grep, glob, exec]`) hunting for tautological tests, mock bypasses, and facades.
 - `teamwork:victory-auditor` — Final independent pre-delivery auditor spawned by Sentinel before reporting completion to the user.
+
+---
+
+## 5. Dual-Runtime Compatibility (Devin CLI & Devin Cloud)
+
+All `/team-*` commands work seamlessly in **both** **Devin CLI** and **Devin Cloud**:
+
+1. **In Devin CLI**:
+   - Subagents are spawned using the custom profiles in `agents/*.md` (`teamwork:sentinel`, `teamwork:orchestrator`, `teamwork:explorer`, `teamwork:test-writer`, `teamwork:worker`, `teamwork:reviewer`, `teamwork:challenger`, `teamwork:forensic-auditor`, `teamwork:victory-auditor`).
+2. **In Devin Cloud**:
+   - Every `/team-*` command (`skills/team-*/SKILL.md`), `AGENTS.md`, `rules/*.md`, and `hooks.json` is automatically synced to Devin Cloud.
+   - When dispatching subagents (`explorer`, `test-writer`, `worker`, `reviewer`, `challenger`, `forensic-auditor`, `victory-auditor`) inside a Devin Cloud session, the Orchestrator automatically uses:
+     - **Managed Devins / Devin MCP** (`devin_session_create`, `devin_session_interact`, `devin_session_gather`) if enabled, OR
+     - **Cloud Subagents / Parallel Sessions**, passing `.agents/teamwork/<agent_id>/DISPATCH.md` + `BRIEFING.md` so each agent follows its exact read/write boundary and writes its 5-Component `handoff.md`.
+   - For deterministic multi-VM Cloud orchestration, `/team-cloud-workflow` provides `skills/team-cloud-workflow/workflow.py`.

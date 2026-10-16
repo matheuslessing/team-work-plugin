@@ -2,7 +2,11 @@
 name: team-audit
 description: "[Teamwork Forensic Audit] Run a zero-tolerance Binary Forensic Integrity Audit (CLEAN vs INTEGRITY VIOLATION) to catch mock tests, tautologies, facade runners, and stubs."
 argument-hint: "[directory or milestone to audit]"
-agent: forensic-auditor
+allowed-tools:
+  - read
+  - grep
+  - glob
+  - exec
 triggers:
   - user
   - model
@@ -10,7 +14,7 @@ triggers:
 
 # Teamwork Forensic Integrity Audit (`/team-audit`)
 
-Perform an exhaustive, zero-trust Forensic Integrity Audit of the project's production code, configurations, test suites, and test runners.
+Perform an exhaustive, zero-trust Forensic Integrity Audit of the project's production code, configurations, test suites, and test runners (spawn `teamwork:forensic-auditor` in Devin CLI, a Managed Devin session in Devin Cloud, or execute the 4-phase audit directly):
 
 1. Initialize `.agents/teamwork/auditor_1/BRIEFING.md` and `progress.md`.
 2. Run the automated integrity scanner helper if available:
