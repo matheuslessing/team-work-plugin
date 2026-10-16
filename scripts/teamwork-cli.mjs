@@ -10,6 +10,7 @@
  *   node scripts/teamwork-cli.mjs status [--workdir <dir>]
  */
 
+import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -22,6 +23,10 @@ function getFlag(name, defaultValue = '') {
     return args[idx + 1];
   }
   return defaultValue;
+}
+
+function hasFlag(name) {
+  return args.includes(name);
 }
 
 const workdir = path.resolve(getFlag('--workdir', process.env.DEVIN_PROJECT_DIR || process.cwd()));
@@ -79,23 +84,38 @@ function cmdSpawn() {
   const agentId = args[1];
   const archetype = args[2] || 'worker';
   const milestone = getFlag('--milestone', 'TBD');
+  const useWorktree = hasFlag('--worktree');
 
   if (!agentId) {
-    console.error('Usage: teamwork-cli.mjs spawn <agent_id> <archetype> [--milestone <m>]');
+    console.error('Usage: teamwork-cli.mjs spawn <agent_id> <archetype> [--milestone <m>] [--worktree]');
     process.exit(1);
   }
 
   const agentDir = path.join(teamworkRoot, agentId);
   ensureDir(agentDir);
 
+  let worktreeInfo = '';
+  if (useWorktree) {
+    const wtDir = path.join(agentDir, 'worktree');
+    const branchName = `teamwork/${agentId}`;
+    try {
+      if (!fs.existsSync(wtDir)) {
+        execSync(`git worktree add "${wtDir}" -b "${branchName}"`, { cwd: workdir, stdio: 'pipe' });
+      }
+      worktreeInfo = `\n- Isolated Git Worktree: ${wtDir} (branch: \`${branchName}\`)`;
+    } catch (err) {
+      worktreeInfo = `\n- Worktree note: could not create git worktree (${err.message.split('\n')[0]})`;
+    }
+  }
+
   writeIfMissing(
     path.join(agentDir, 'DISPATCH.md'),
-    `## ${nowIso}\nFrom: orchestrator_1\nPriority: MESSAGE_PRIORITY_HIGH\n\nYou are assigned as \`${agentId}\` (Archetype: \`${archetype}\`) for Milestone: ${milestone}.\nYour working directory is: ${agentDir}\nOriginal request: ${path.join(teamworkRoot, 'ORIGINAL_REQUEST.md')}\nProject architecture & contracts: ${path.join(teamworkRoot, 'orchestrator_1', 'PROJECT.md')}\n\n### Exclusive Write Ownership\n- ${agentDir}\n`
+    `## ${nowIso}\nFrom: orchestrator_1\nPriority: MESSAGE_PRIORITY_HIGH\n\nYou are assigned as \`${agentId}\` (Archetype: \`${archetype}\`) for Milestone: ${milestone}.\nYour working directory is: ${agentDir}${worktreeInfo}\nOriginal request: ${path.join(teamworkRoot, 'ORIGINAL_REQUEST.md')}\nProject architecture & contracts: ${path.join(teamworkRoot, 'orchestrator_1', 'PROJECT.md')}\n\n### Exclusive Write Ownership\n- ${agentDir}\n`
   );
 
   writeIfMissing(
     path.join(agentDir, 'BRIEFING.md'),
-    `# BRIEFING — ${nowIso}\n\n## Mission\n[Define mission for ${agentId}]\n\n## 🔒 My Identity\n- Archetype: ${archetype}\n- Working directory: ${agentDir}\n- Original parent: orchestrator_1\n- Milestone: ${milestone}\n\n## 🔒 Key Constraints\n- Adhere strictly to write boundaries in DISPATCH.md\n- MANDATORY INTEGRITY MANDATE: Genuine logic only, no hardcoded test shortcuts, no facades\n\n## Key Decisions Made\n- [Pending]\n\n## Artifact Index\n- ${path.join(agentDir, 'DISPATCH.md')}\n- ${path.join(agentDir, 'BRIEFING.md')}\n- ${path.join(agentDir, 'progress.md')}\n- ${path.join(agentDir, 'handoff.md')}\n`
+    `# BRIEFING — ${nowIso}\n\n## Mission\n[Define mission for ${agentId}]\n\n## 🔒 My Identity\n- Archetype: ${archetype}\n- Working directory: ${agentDir}${worktreeInfo}\n- Original parent: orchestrator_1\n- Milestone: ${milestone}\n\n## 🔒 Key Constraints\n- Adhere strictly to write boundaries in DISPATCH.md\n- MANDATORY INTEGRITY MANDATE: Genuine logic only, no hardcoded test shortcuts, no facades\n\n## Key Decisions Made\n- [Pending]\n\n## Artifact Index\n- ${path.join(agentDir, 'DISPATCH.md')}\n- ${path.join(agentDir, 'BRIEFING.md')}\n- ${path.join(agentDir, 'progress.md')}\n- ${path.join(agentDir, 'handoff.md')}\n`
   );
 
   writeIfMissing(
@@ -103,7 +123,7 @@ function cmdSpawn() {
     `# Progress — ${agentId}\n\n- [${nowIso}] Initialized workspace for ${agentId} (${archetype}).\n`
   );
 
-  console.log(`Spawned workspace for ${agentId} (${archetype}) at: ${agentDir}`);
+  console.log(`Spawned workspace for ${agentId} (${archetype}) at: ${agentDir}${worktreeInfo}`);
 }
 
 function cmdValidateHandoff() {
