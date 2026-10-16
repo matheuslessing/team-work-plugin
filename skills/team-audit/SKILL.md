@@ -1,6 +1,6 @@
 ---
-name: audit
-description: Run an independent Binary Forensic Integrity Audit using the forensic-auditor subagent to detect mock tests, tautologies, facade runners, and code stubs.
+name: team-audit
+description: "[Teamwork Forensic Audit] Run a zero-tolerance Binary Forensic Integrity Audit (CLEAN vs INTEGRITY VIOLATION) to catch mock tests, tautologies, facade runners, and stubs."
 argument-hint: "[directory or milestone to audit]"
 agent: forensic-auditor
 triggers:
@@ -8,7 +8,7 @@ triggers:
   - model
 ---
 
-# Teamwork Forensic Integrity Audit (`/teamwork:audit`)
+# Teamwork Forensic Integrity Audit (`/team-audit`)
 
 Perform an exhaustive, zero-trust Forensic Integrity Audit of the project's production code, configurations, test suites, and test runners.
 

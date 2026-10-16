@@ -1,6 +1,6 @@
 ---
-name: run
-description: Launch the full autonomous Teamwork multi-agent pipeline (Sentinel -> Orchestrator -> Explorers Survey -> Dual-Track E2E Tests & Parallel Workers -> Reviewers, Challengers & Forensic Auditor Gate -> Victory Audit).
+name: team-run
+description: "[Teamwork Full Pipeline] Launch the autonomous multi-agent system (Sentinel -> Orchestrator -> Parallel Explorers -> Dual-Track E2E Tests & Milestone Workers -> Adversarial & Forensic Gate -> Victory Audit)."
 argument-hint: "[project prompt or path to ORIGINAL_REQUEST.md]"
 allowed-tools:
   - read
@@ -13,7 +13,7 @@ triggers:
   - model
 ---
 
-# Teamwork Autonomous Multi-Agent Pipeline (`/teamwork:run`)
+# Teamwork Autonomous Multi-Agent Pipeline (`/team-run`)
 
 Execute the complete **Teamwork Project Pattern** with Dual-Track execution and Binary Forensic Gate enforcement.
 

@@ -1,6 +1,6 @@
 ---
-name: status
-description: Display a live dashboard of the current Teamwork mission (.agents/teamwork/), including active subagents, milestone statuses, and Gate verdicts.
+name: team-status
+description: "[Teamwork Mission Dashboard] Show live status of .agents/teamwork/, including active subagents, milestone progress, 5-Component Handoffs, and Gate verdicts."
 allowed-tools:
   - read
   - glob
@@ -10,7 +10,7 @@ triggers:
   - model
 ---
 
-# Teamwork Mission Status Dashboard (`/teamwork:status`)
+# Teamwork Mission Status Dashboard (`/team-status`)
 
 Inspect `.agents/teamwork/` in the current repository and present a concise status dashboard:
 

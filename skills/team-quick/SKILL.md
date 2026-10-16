@@ -1,6 +1,6 @@
 ---
-name: quick
-description: Run the Small Focused Team workflow (1 Explorer/Worker + repeated Adversarial Reviewer & Forensic Auditor loop) for a single self-contained bug fix, feature, or refactor.
+name: team-quick
+description: "[Teamwork Small Focused Team] Run 1 Milestone Worker + repeated Adversarial Reviewer & Forensic Auditor loop for a self-contained bug fix, feature, or refactor."
 argument-hint: "<description of the self-contained fix or feature>"
 allowed-tools:
   - read
@@ -13,7 +13,7 @@ triggers:
   - model
 ---
 
-# Teamwork Small Focused Team (`/teamwork:quick`)
+# Teamwork Small Focused Team (`/team-quick`)
 
 Use this workflow when the task is a **single self-contained change** (a bug fix, small feature, or contained refactor) that does not need to be split across multiple parallel milestone workers, but still demands **Teamwork's adversarial review and forensic integrity guarantees**.
 

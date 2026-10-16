@@ -1,6 +1,6 @@
 ---
-name: test-track
-description: Execute Track A (E2E Testing Track) using the test-writer subagent to build a 4-tier E2E test suite, automated CLI runner, TEST_INFRA.md, and TEST_READY.md.
+name: team-test-track
+description: "[Teamwork Track A QA] Launch the independent Test Writer subagent to build a 4-tier E2E test suite, CLI test runner, TEST_INFRA.md, and TEST_READY.md."
 argument-hint: "[path to PROJECT.md or target modules]"
 agent: test-writer
 triggers:
@@ -8,7 +8,7 @@ triggers:
   - model
 ---
 
-# Teamwork Track A — 4-Tier E2E Testing Track (`/teamwork:test-track`)
+# Teamwork Track A — 4-Tier E2E Testing Track (`/team-test-track`)
 
 Design and implement the project's independent, requirement-driven 4-Tier E2E Test Suite.
 

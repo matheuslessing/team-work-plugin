@@ -8,7 +8,7 @@ Autonomous multi-agent engineering system for **Devin CLI** featuring interactiv
 
 ```mermaid
 flowchart TD
-    User["User Request"] --> Craft["/teamwork:craft (9-Step Prompt Crafting)"]
+    User["User Request"] --> Craft["/team-craft (9-Step Prompt Crafting)"]
     Craft --> Sentinel["teamwork:sentinel (Root Supervisor)"]
     Sentinel --> Orch["teamwork:orchestrator (Dispatch-Only Orchestrator)"]
 
@@ -37,12 +37,13 @@ flowchart TD
 
 ---
 
-## Installation in Devin CLI
+## Installation in Devin CLI & Devin Cloud
 
 ### Install Directly from GitHub
 ```bash
 devin plugins install matheuslessing/team-work-plugin
 ```
+*(Plugins installed from GitHub or added on the Devin Web Customize page automatically sync your `skills/`, `rules/`, `AGENTS.md`, and `hooks.json` across both Devin CLI and Devin Cloud).*
 
 ### Install from a Local Clone (Live Editing)
 ```bash
@@ -58,18 +59,21 @@ devin plugins info teamwork
 
 ---
 
-## Slash Commands (Skills)
+## Slash Commands (`skills/team-*`)
+
+All skills are prefixed with `team-` so they group cleanly in the `/` autocomplete menu with descriptive tags:
 
 | Command | Description |
 | :--- | :--- |
-| `/teamwork:craft` | Interactive 9-step prompt crafting workflow (`prompt_draft.md` $\to$ `ORIGINAL_REQUEST.md`) with automatic delegation. |
-| `/teamwork:run` | Launch the full autonomous Teamwork Dual-Track pipeline (`Sentinel -> Orchestrator -> Survey -> Dual-Track -> Gate -> Victory Audit`). |
-| `/teamwork:quick` | Run the **Small Focused Team** (`1 Worker + Adversarial Reviewer & Forensic Auditor loop`) for self-contained bug fixes or features. |
-| `/teamwork:survey` | Run Phase 0 parallel read-only `teamwork:explorer` subagents to map the codebase and generate `PROJECT.md`. |
-| `/teamwork:test-track` | Execute Track A (`teamwork:test-writer`) to author `TEST_INFRA.md`, 4-tier E2E test suites, an automated CLI runner, and `TEST_READY.md`. |
-| `/teamwork:gate` | Run a Verification Gate (`reviewer` + `challenger` + `forensic-auditor`) and record verdicts in `GATE_STATUS.md`. |
-| `/teamwork:audit` | Run a standalone Binary Forensic Integrity Audit (`teamwork:forensic-auditor`) to detect mock tautologies, facade runners, and stubs. |
-| `/teamwork:status` | Display a live dashboard of `.agents/teamwork/`, including active subagents, milestone statuses, and Gate verdicts. |
+| `/team-craft` | **`[Teamwork Prompt Crafting]`** Interactive 9-step prompt engineering interview (`prompt_draft.md` $\to$ `ORIGINAL_REQUEST.md`) with automatic delegation. |
+| `/team-run` | **`[Teamwork Full Autonomous Pipeline]`** Launch the full Dual-Track multi-agent pipeline (`Sentinel -> Orchestrator -> Survey -> Dual-Track -> Gate -> Victory Audit`). |
+| `/team-quick` | **`[Teamwork Quick Focused Team]`** Run a compact team (`1 Worker + Adversarial Reviewer & Forensic Auditor loop`) for self-contained bug fixes or features. |
+| `/team-survey` | **`[Teamwork Phase 0 Survey]`** Dispatch parallel read-only `teamwork:explorer` subagents to map architecture and generate `PROJECT.md`. |
+| `/team-test-track` | **`[Teamwork Track A QA]`** Launch `teamwork:test-writer` to build a 4-tier E2E test suite, CLI test runner, `TEST_INFRA.md`, and `TEST_READY.md`. |
+| `/team-gate` | **`[Teamwork Verification Gate]`** Execute the full 3-agent Gate (`reviewer` + `challenger` + `forensic-auditor`) and record verdicts in `GATE_STATUS.md`. |
+| `/team-audit` | **`[Teamwork Forensic Audit]`** Run a zero-tolerance Binary Forensic Integrity Audit (`🟢 CLEAN` vs `🔴 INTEGRITY VIOLATION`) to catch mock tests, tautologies, and facades. |
+| `/team-status` | **`[Teamwork Mission Dashboard]`** Show live status of `.agents/teamwork/`, including active subagents, milestone progress, and Gate verdicts. |
+| `/team-cloud-workflow` | **`[Teamwork Devin Cloud 100%]`** Run the deterministic Devin Dynamic Workflow (`workflow.py`) or Managed Devins in Devin Cloud with parallel VMs, reactive P2P wakeup, and cron schedules. |
 
 ---
 
@@ -89,14 +93,24 @@ devin plugins info teamwork
 
 ---
 
+## Devin Cloud 100% Parity (`workflow.py` & Managed Devins)
+
+In **Devin Cloud**, `skills/team-cloud-workflow/workflow.py` and **Managed Devins / Devin MCP** unlock the remaining runtime capabilities natively:
+- **Deterministic Dynamic Workflow (`workflow.py`)**: Uses `@register_workflow`, `await parallel(...)`, and `await agent(...)` with strict JSON Schema output validation to orchestrate parallel Cloud VMs across Phase 0 Survey, Track A + Track B, Gate Verification, Remediation Loops, and Victory Audit.
+- **Async P2P Messaging & Reactive Wakeup**: Uses `devin_session_create`, `devin_session_interact`, and `devin_session_gather` so the Coordinator can message running child sessions in real time and wake up reactively when children complete.
+- **Scheduled Crons & Heartbeats**: Uses `devin_schedule_manage` (`*/8 * * * *`) for recurring Sentinel/Orchestrator liveness heartbeats.
+- **Local Git Worktree Isolation**: Locally in Devin CLI, `node scripts/teamwork-cli.mjs spawn worker_m1 implementer --milestone M1 --worktree` creates an isolated git worktree (`worktrees/worker_m1` on branch `teamwork/worker_m1`) and symlinks `.agents/teamwork/` so parallel workers never collide on disk.
+
+---
+
 ## Lifecycle Hooks & CLI Utility
 
 - **`PostCompaction` Hook (`hooks.json`)**: Automatically re-injects `ORIGINAL_REQUEST.md`, `BRIEFING.md`, `PROJECT.md`, and `GATE_STATUS.md` into the agent's context whenever context compaction occurs.
 - **`Stop` Hook (`hooks.json`)**: Warns if an orchestrator attempts to stop while `GATE_STATUS.md` still reports `FAIL` on an in-progress mission.
-- **`scripts/teamwork-cli.mjs`**: Zero-dependency Node.js helper for workspace initialization, 5-Component `handoff.md` validation, static forensic integrity scanning, and status reporting:
+- **`scripts/teamwork-cli.mjs`**: Zero-dependency Node.js helper for workspace initialization, isolated git worktree creation, 5-Component `handoff.md` validation, static forensic integrity scanning, and status reporting:
   ```bash
   node scripts/teamwork-cli.mjs init
-  node scripts/teamwork-cli.mjs spawn worker_m1 implementer --milestone M1
+  node scripts/teamwork-cli.mjs spawn worker_m1 implementer --milestone M1 --worktree
   node scripts/teamwork-cli.mjs validate-handoff .agents/teamwork/worker_m1/handoff.md
   node scripts/teamwork-cli.mjs scan-integrity
   node scripts/teamwork-cli.mjs check-gate

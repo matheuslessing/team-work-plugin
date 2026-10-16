@@ -1,6 +1,6 @@
 ---
-name: gate
-description: Run a full Teamwork Verification Gate (Adversarial Reviewers + Empirical Challengers + Binary Forensic Auditor) and record verdicts in GATE_STATUS.md.
+name: team-gate
+description: "[Teamwork Verification Gate] Execute the full 3-agent Gate (Adversarial Reviewer + Empirical Challenger + Binary Forensic Auditor) and record verdicts in GATE_STATUS.md."
 argument-hint: "[iteration number or target milestones]"
 allowed-tools:
   - read
@@ -13,7 +13,7 @@ triggers:
   - model
 ---
 
-# Teamwork Verification Gate (`/teamwork:gate`)
+# Teamwork Verification Gate (`/team-gate`)
 
 Run an independent, multi-agent Verification Gate across the implemented milestones and test suites.
 

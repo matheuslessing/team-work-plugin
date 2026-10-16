@@ -1,13 +1,13 @@
 ---
-name: cloud-workflow
-description: Execute the Teamwork Dual-Track pipeline in Devin Cloud using a deterministic Devin Dynamic Workflow (workflow.py) or Managed Devins with parallel VMs, reactive wakeup, and scheduled crons.
+name: team-cloud-workflow
+description: "[Teamwork Devin Cloud 100%] Run the deterministic Devin Dynamic Workflow (workflow.py) or Managed Devins in Devin Cloud with parallel VMs, reactive P2P wakeup, and cron schedules."
 argument-hint: "[project requirements or path to ORIGINAL_REQUEST.md]"
 triggers:
   - user
   - model
 ---
 
-# Teamwork Cloud Dynamic Workflow & Managed Devins (`/teamwork:cloud-workflow`)
+# Teamwork Cloud Dynamic Workflow & Managed Devins (`/team-cloud-workflow`)
 
 In **Devin Cloud** (or when connected to the **Devin MCP Server** `https://mcp.devin.ai/mcp`), Teamwork achieves **100% parity** with Antigravity's native runtime by combining **Devin Dynamic Workflows (`workflow.py`)** and **Managed Devins**.
 

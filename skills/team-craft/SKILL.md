@@ -1,6 +1,6 @@
 ---
-name: craft
-description: Craft a well-structured Teamwork project prompt through the 9-step interactive workflow (prompt_draft.md -> ORIGINAL_REQUEST.md), then launch the Teamwork multi-agent system.
+name: team-craft
+description: "[Teamwork Phase 1] Interactive 9-step prompt crafting interview (creates prompt_draft.md & ORIGINAL_REQUEST.md) and launches the Teamwork multi-agent system."
 argument-hint: "[initial project idea or requirements]"
 allowed-tools:
   - read
@@ -13,7 +13,7 @@ triggers:
   - model
 ---
 
-# Teamwork Two-Phase Prompt Crafting & Delegation (`/teamwork:craft`)
+# Teamwork Two-Phase Prompt Crafting & Delegation (`/team-craft`)
 
 Execute the two-phase Teamwork workflow:
 1. **Phase 1**: Craft a rigorous, well-structured task prompt with the user through Steps 1–9, maintaining `.agents/teamwork/prompt_draft.md`.

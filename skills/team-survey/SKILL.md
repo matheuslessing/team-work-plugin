@@ -1,6 +1,6 @@
 ---
-name: survey
-description: Run Phase 0 parallel codebase exploration using read-only Explorer subagents and synthesize findings into .agents/teamwork/orchestrator_1/PROJECT.md.
+name: team-survey
+description: "[Teamwork Phase 0 Survey] Dispatch parallel read-only Explorer subagents to map architecture, trace root causes, and generate .agents/teamwork/orchestrator_1/PROJECT.md."
 argument-hint: "[requirements or areas to survey]"
 allowed-tools:
   - read
@@ -13,7 +13,7 @@ triggers:
   - model
 ---
 
-# Teamwork Phase 0 Codebase Survey (`/teamwork:survey`)
+# Teamwork Phase 0 Codebase Survey (`/team-survey`)
 
 Execute a comprehensive, read-only multi-agent survey of the codebase to establish empirical facts, identify root causes, and author `.agents/teamwork/orchestrator_1/PROJECT.md`.
 

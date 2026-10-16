@@ -62,14 +62,15 @@ Every subagent (`explorer`, `test-writer`, `worker`, `reviewer`, `challenger`, `
 ## 4. Slash Commands & Subagent Profiles
 
 ### Slash Commands (Skills)
-- `/teamwork:craft` — Interactive 9-step prompt crafting workflow (`prompt_draft.md` -> `.agents/teamwork/ORIGINAL_REQUEST.md`) with automatic delegation upon approval.
-- `/teamwork:run` — Full autonomous Teamwork execution (`Sentinel -> Orchestrator -> Survey -> Dual-Track -> Gate Verification -> Victory Audit`).
-- `/teamwork:quick` — Small, focused team workflow (`1 Worker + Adversarial Reviewer/Auditor loop`) for self-contained bug fixes or features.
-- `/teamwork:survey` — Parallel codebase exploration (`teamwork:explorer`) to generate `.agents/teamwork/orchestrator_1/PROJECT.md`.
-- `/teamwork:test-track` — Independent 4-tier E2E test suite authoring (`teamwork:test-writer`) producing `TEST_INFRA.md` and `TEST_READY.md`.
-- `/teamwork:gate` — Full verification gate (`reviewer` + `challenger` + `forensic-auditor`) updating `GATE_STATUS.md`.
-- `/teamwork:audit` — Standalone Forensic Integrity Audit (`teamwork:forensic-auditor`) scanning production code and test suites for shortcuts or mocks.
-- `/teamwork:status` — Live status dashboard of the current `.agents/teamwork/` mission.
+- `/team-craft` — `[Teamwork Prompt Crafting]` Interactive 9-step prompt crafting workflow (`prompt_draft.md` -> `.agents/teamwork/ORIGINAL_REQUEST.md`) with automatic delegation upon approval.
+- `/team-run` — `[Teamwork Full Autonomous Pipeline]` Full Dual-Track execution (`Sentinel -> Orchestrator -> Survey -> Dual-Track -> Gate Verification -> Victory Audit`).
+- `/team-quick` — `[Teamwork Quick Focused Team]` Small, focused team workflow (`1 Worker + Adversarial Reviewer/Auditor loop`) for self-contained bug fixes or features.
+- `/team-survey` — `[Teamwork Phase 0 Survey]` Parallel codebase exploration (`teamwork:explorer`) to generate `.agents/teamwork/orchestrator_1/PROJECT.md`.
+- `/team-test-track` — `[Teamwork Track A QA]` Independent 4-tier E2E test suite authoring (`teamwork:test-writer`) producing `TEST_INFRA.md` and `TEST_READY.md`.
+- `/team-gate` — `[Teamwork Verification Gate]` Full 3-agent verification gate (`reviewer` + `challenger` + `forensic-auditor`) updating `GATE_STATUS.md`.
+- `/team-audit` — `[Teamwork Forensic Audit]` Standalone Binary Forensic Integrity Audit (`teamwork:forensic-auditor`) scanning production code and test suites for shortcuts or mocks.
+- `/team-status` — `[Teamwork Mission Dashboard]` Live status dashboard of the current `.agents/teamwork/` mission.
+- `/team-cloud-workflow` — `[Teamwork Devin Cloud 100%]` Deterministic Devin Dynamic Workflow (`workflow.py`) and Managed Devins orchestration with parallel Cloud VMs, async P2P wakeup, and cron schedules.
 
 ### Custom Subagent Profiles (`agents/`)
 - `teamwork:sentinel` — Top-level supervisor (`max-nesting: 3`). Relays user intent, launches orchestrator, enforces mandatory Victory Audit.
