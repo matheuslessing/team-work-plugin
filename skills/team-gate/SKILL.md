@@ -17,12 +17,12 @@ triggers:
 
 Run an independent, multi-agent Verification Gate across the implemented milestones and test suites.
 
-## Step 0: Automatic Runtime Detection (No User Reminder Needed)
-Run environment detection first:
+## Step 0: Automatic Runtime Detection & 30-Minute `watch_dog` (No User Reminder Needed)
+Run environment detection and automatic 30-minute VM `watch_dog` startup first:
 ```bash
 node "${PLUGIN_ROOT}/scripts/teamwork-cli.mjs" detect-env --workdir .
 ```
-- **If `DEVIN_CLOUD` is detected**: Automatically run `.agents/teamwork/workflow.py --mode gate` (`teamwork-gate-pipeline`) as primary engine, or fall back automatically to spawning parallel Reviewer, Challenger, and Forensic Auditor child sessions via `devin_session_create` + `devin_session_gather`.
+- **If `DEVIN_CLOUD` is detected**: `detect-env` automatically starts the 30-minute `watch_dog` daemon (`window=30m, pulse=10m`). Automatically run `.agents/teamwork/workflow.py --mode gate` (`teamwork-gate-pipeline`) as primary engine, or fall back automatically to spawning parallel Reviewer, Challenger, and Forensic Auditor child sessions via `devin_session_create` + `devin_session_gather` (with `devin_schedule_manage` `*/20 * * * *` `watch_dog`).
 - **If `DEVIN_CLI_LOCAL` is detected**: Spawn parallel `teamwork:reviewer`, `teamwork:challenger`, and `teamwork:forensic-auditor` subagents.
 
 ## Steps

@@ -17,14 +17,15 @@ triggers:
 
 Use this workflow when the task is a **single self-contained change** (a bug fix, small feature, or contained refactor) that does not need to be split across multiple parallel milestone workers, but still demands **Teamwork's adversarial review and forensic integrity guarantees**.
 
-## Step 0: Automatic Runtime Detection (No User Reminder Needed)
-Run environment detection and workspace initialization first:
+## Step 0: Automatic Runtime Detection & 30-Minute `watch_dog` (No User Reminder Needed)
+Run environment detection, 30-minute Orchestrator VM `watch_dog` startup, and workspace initialization first:
 ```bash
 node "${PLUGIN_ROOT}/scripts/teamwork-cli.mjs" init --workdir .
 ```
-- **If `DEVIN_CLOUD` is detected (DO NOT wait for the user to remind you to use workflows)**:
-  1. **Primary Cloud Engine**: Run `.agents/teamwork/workflow.py --mode quick` (`teamwork-quick-pipeline`: `1 Worker -> Parallel Reviewer + Forensic Auditor loop`).
-  2. **Automatic Fallback**: If the Dynamic Workflow runner is not active in this session, immediately use **Managed Devins** (`devin_session_create` + `devin_session_gather`) to spawn `worker_m1` followed by parallel `reviewer_1` and `auditor_1`.
+- **If `DEVIN_CLOUD` is detected (DO NOT wait for the user to remind you to use workflows or `watch_dog`)**:
+  0. **30-Minute `watch_dog`**: `init` automatically launches the background VM keep-alive daemon (`window=30m, pulse=10m`).
+  1. **Primary Cloud Engine**: Run `.agents/teamwork/workflow.py --mode quick` (`teamwork-quick-pipeline`: `1 Worker -> Parallel Reviewer + Forensic Auditor loop` with built-in async `orchestrator_vm_watchdog()`).
+  2. **Automatic Fallback**: If the Dynamic Workflow runner is not active in this session, immediately use **Managed Devins** (`devin_session_create` + `devin_session_gather` + `devin_schedule_manage` `*/20 * * * *` `watch_dog`) to spawn `worker_m1` followed by parallel `reviewer_1` and `auditor_1`.
 - **If `DEVIN_CLI_LOCAL` is detected**:
   - Dispatch local custom subagents (`teamwork:worker`, `teamwork:reviewer`, `teamwork:forensic-auditor`).
 

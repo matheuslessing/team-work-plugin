@@ -14,9 +14,9 @@ triggers:
 
 # Teamwork Forensic Integrity Audit (`/team-audit`)
 
-## Step 0: Automatic Runtime Detection (No User Reminder Needed)
-Run `node "${PLUGIN_ROOT}/scripts/teamwork-cli.mjs" detect-env --workdir .` first:
-- **In `DEVIN_CLOUD`**: Execute `.agents/teamwork/workflow.py --mode gate` or spawn an independent `auditor_1` session via **Managed Devins** (`devin_session_create` + `devin_session_gather`).
+## Step 0: Automatic Runtime Detection & 30-Minute `watch_dog` (No User Reminder Needed)
+Run `node "${PLUGIN_ROOT}/scripts/teamwork-cli.mjs" detect-env --workdir .` first (which automatically starts the 30-minute Orchestrator VM `watch_dog` daemon in Cloud):
+- **In `DEVIN_CLOUD`**: Execute `.agents/teamwork/workflow.py --mode gate` or spawn an independent `auditor_1` session via **Managed Devins** (`devin_session_create` + `devin_session_gather` + `devin_schedule_manage` `*/20 * * * *` `watch_dog`).
 - **In `DEVIN_CLI_LOCAL`**: Spawn the `teamwork:forensic-auditor` custom subagent.
 
 ## Steps

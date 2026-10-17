@@ -15,9 +15,9 @@ triggers:
 
 # Teamwork Track A — 4-Tier E2E Testing Track (`/team-test-track`)
 
-## Step 0: Automatic Runtime Detection (No User Reminder Needed)
-Run `node "${PLUGIN_ROOT}/scripts/teamwork-cli.mjs" detect-env --workdir .` first:
-- **In `DEVIN_CLOUD`**: Spawn a dedicated `test_writer_1` session via Dynamic Workflow (`.agents/teamwork/workflow.py`) or **Managed Devins** (`devin_session_create` + `devin_session_gather`).
+## Step 0: Automatic Runtime Detection & 30-Minute `watch_dog` (No User Reminder Needed)
+Run `node "${PLUGIN_ROOT}/scripts/teamwork-cli.mjs" detect-env --workdir .` first (which automatically starts the 30-minute Orchestrator VM `watch_dog` daemon in Cloud):
+- **In `DEVIN_CLOUD`**: Spawn a dedicated `test_writer_1` session via Dynamic Workflow (`.agents/teamwork/workflow.py`) or **Managed Devins** (`devin_session_create` + `devin_session_gather` + `devin_schedule_manage` `*/20 * * * *` `watch_dog`).
 - **In `DEVIN_CLI_LOCAL`**: Spawn the `teamwork:test-writer` custom subagent.
 
 ## Steps

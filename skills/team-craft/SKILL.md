@@ -121,17 +121,18 @@ Present the final `prompt_draft.md` to the user and set status to `Ready for lau
 
 ---
 
-## Delegation Protocol (On User Approval — Automatic Runtime Detection)
+## Delegation Protocol (On User Approval — Automatic Runtime Detection & 30-Min `watch_dog`)
 
 When the user approves (`"go"`, `"looks good"`, `"launch"`, `"pode rodar"`, `"aprovo"`):
 1. Copy the approved prompt from `.agents/teamwork/prompt_draft.md` to `.agents/teamwork/ORIGINAL_REQUEST.md` with an ISO timestamp header.
-2. Run the helper script to initialize the workspace folders, detect the runtime (`DEVIN_CLOUD` vs `DEVIN_CLI_LOCAL`), and auto-provision `.agents/teamwork/workflow.py` when in Cloud:
+2. Run the helper script to initialize the workspace folders, detect the runtime (`DEVIN_CLOUD` vs `DEVIN_CLI_LOCAL`), auto-provision `.agents/teamwork/workflow.py`, and **automatically start the 30-minute Orchestrator VM `watch_dog` daemon** when in Cloud:
    ```bash
    node "${PLUGIN_ROOT}/scripts/teamwork-cli.mjs" init --workdir .
    ```
 3. **Launch Automatically Based on Detected Runtime (DO NOT wait for the user to remind you)**:
    - **If `DEVIN_CLOUD` is detected**:
+     0. **30-Minute `watch_dog` Active**: The background VM daemon (`watchdog start --window-min 30 --interval-min 10`) is already running via `init`; also register a session cron via `devin_schedule_manage` (`*/20 * * * *`) if using Managed Devins so the primary VM never times out.
      1. **Primary Cloud Engine**: Immediately execute `.agents/teamwork/workflow.py --mode full` (or `--mode quick` if the user chose the Small Focused Team). Copy `.agents/teamwork/workflow.py` to `./workflow.py` only if the runner requires root placement.
-     2. **Automatic Fallback**: If the Dynamic Workflow runner is not active in the current session, immediately spawn parallel child Devin sessions via **Managed Devins** (`devin_session_create` + `devin_session_gather` + `devin_schedule_manage`).
+     2. **Automatic Fallback**: If the Dynamic Workflow runner is not active in the current session, immediately spawn parallel child Devin sessions via **Managed Devins** (`devin_session_create` + `devin_session_gather` + `devin_schedule_manage` `*/20 * * * *` `watch_dog`).
    - **If `DEVIN_CLI_LOCAL` is detected**:
      - Spawn the **`teamwork:sentinel`** subagent (or invoke `/team-run` for full team, `/team-quick` for small team) passing the full text of `ORIGINAL_REQUEST.md`.

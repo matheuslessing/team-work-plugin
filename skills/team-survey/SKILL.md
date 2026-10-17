@@ -17,12 +17,12 @@ triggers:
 
 Execute a comprehensive, read-only multi-agent survey of the codebase to establish empirical facts, identify root causes, and author `.agents/teamwork/orchestrator_1/PROJECT.md`.
 
-## Step 0: Automatic Runtime Detection (No User Reminder Needed)
-Run environment detection first:
+## Step 0: Automatic Runtime Detection & 30-Minute `watch_dog` (No User Reminder Needed)
+Run environment detection and automatic 30-minute VM `watch_dog` startup first:
 ```bash
 node "${PLUGIN_ROOT}/scripts/teamwork-cli.mjs" detect-env --workdir .
 ```
-- **If `DEVIN_CLOUD` is detected**: Automatically run `.agents/teamwork/workflow.py --mode survey` (`teamwork-survey-pipeline`) as primary engine, or fall back automatically to spawning parallel Explorer child sessions via `devin_session_create` + `devin_session_gather`.
+- **If `DEVIN_CLOUD` is detected**: `detect-env` automatically starts the 30-minute `watch_dog` daemon (`window=30m, pulse=10m`). Automatically run `.agents/teamwork/workflow.py --mode survey` (`teamwork-survey-pipeline`) as primary engine, or fall back automatically to spawning parallel Explorer child sessions via `devin_session_create` + `devin_session_gather` (with `devin_schedule_manage` `*/20 * * * *` `watch_dog`).
 - **If `DEVIN_CLI_LOCAL` is detected**: Spawn parallel `teamwork:explorer` custom subagents.
 
 ## Steps
