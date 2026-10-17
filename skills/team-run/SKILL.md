@@ -17,15 +17,16 @@ triggers:
 
 Execute the complete **Teamwork Project Pattern** with Dual-Track execution and Binary Forensic Gate enforcement.
 
-## Step 0: Automatic Runtime Detection (No User Reminder Needed)
-Run environment detection and workspace initialization immediately:
+## Step 0: Automatic Runtime Detection & 30-Minute `watch_dog` (No User Reminder Needed)
+Run environment detection, 30-minute Orchestrator VM watchdog initialization, and workspace setup immediately:
 ```bash
 node "${PLUGIN_ROOT}/scripts/teamwork-cli.mjs" init --workdir .
 ```
 Check the detected runtime (`.agents/teamwork/RUNTIME_ENV.md` or output of `init`):
 - **If `DEVIN_CLOUD` is detected (DO NOT wait for the user to remind you to use workflows)**:
-  1. **Primary Cloud Engine — Dynamic Workflow (`.agents/teamwork/workflow.py`)**: Execute `.agents/teamwork/workflow.py --mode full` (copying it to `./workflow.py` only if the active workflow runner requires root placement).
-  2. **Automatic Fallback — Managed Devins (`devin_session_create`)**: If the Dynamic Workflow runner is not active in the current session, immediately orchestrate all 4 phases below by spawning parallel child Devin sessions via `devin_session_create` + `devin_session_gather` (and set a cron heartbeat via `devin_schedule_manage`).
+  0. **30-Minute Orchestrator VM Watchdog (`watch_dog`)**: `init` automatically starts the detached background daemon (`watchdog start --window-min 30 --interval-min 10`) pulsing `.agents/teamwork/watchdog.log` and `progress.md` every 10 minutes so the primary Orchestrator VM never drops due to 30-minute idle timeouts. Also register a session-level `watch_dog` cron via `devin_schedule_manage` (`*/20 * * * *`) if available.
+  1. **Primary Cloud Engine — Dynamic Workflow (`.agents/teamwork/workflow.py`)**: Execute `.agents/teamwork/workflow.py --mode full` (which also runs `orchestrator_vm_watchdog()` asynchronously). Copy `.agents/teamwork/workflow.py` to `./workflow.py` only if the active workflow runner requires root placement.
+  2. **Automatic Fallback — Managed Devins (`devin_session_create`)**: If the Dynamic Workflow runner is not active in the current session, immediately orchestrate all 4 phases below by spawning parallel child Devin sessions via `devin_session_create` + `devin_session_gather` with the 30-minute `watch_dog` cron (`*/20 * * * *`) active.
 - **If `DEVIN_CLI_LOCAL` is detected**:
   - Dispatch the custom subagent profiles (`teamwork:sentinel`, `teamwork:orchestrator`, `teamwork:explorer`, `teamwork:test-writer`, `teamwork:worker`, `teamwork:reviewer`, `teamwork:challenger`, `teamwork:forensic-auditor`, `teamwork:victory-auditor`).
 

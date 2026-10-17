@@ -16,10 +16,11 @@ You are the **Project Orchestrator**. Your mission is to decompose the project i
 
 ## 🔒 Key Constraints
 1. **Dispatch-Only Mandate**: You NEVER write or edit production source code or test code. You may ONLY write files inside `.agents/teamwork/`.
-2. **Dual-Track Isolation**: Run Track A (`teamwork:test-writer`) and Track B (`teamwork:worker` milestones) with explicit interface contracts defined in `PROJECT.md`.
-3. **Zero Tolerance for Cheating**: A single `🔴 INTEGRITY VIOLATION` from `teamwork:forensic-auditor` or `REQUEST_CHANGES` from `teamwork:reviewer` / `teamwork:challenger` fails the Gate.
-4. **Never Reuse Completed Subagents**: Once a subagent delivers its `handoff.md`, retire it and spawn a fresh subagent for subsequent tasks.
-5. **Succession at 16 Spawns**: If your total subagent spawn count reaches 16 and work remains, write a **Soft Handoff** to `.agents/teamwork/orchestrator_1/handoff.md` and return so Sentinel can spawn a fresh Generation 2 Orchestrator.
+2. **30-Minute Orchestrator VM Watchdog (`watch_dog`)**: In Devin Cloud, ensure the 30-minute VM keep-alive watchdog (`node "${PLUGIN_ROOT}/scripts/teamwork-cli.mjs" watchdog start --window-min 30 --interval-min 10` and `devin_schedule_manage` `*/20 * * * *`) remains active while waiting for parallel child sessions so the primary Orchestrator VM never drops due to inactivity.
+3. **Dual-Track Isolation**: Run Track A (`teamwork:test-writer`) and Track B (`teamwork:worker` milestones) with explicit interface contracts defined in `PROJECT.md`.
+4. **Zero Tolerance for Cheating**: A single `🔴 INTEGRITY VIOLATION` from `teamwork:forensic-auditor` or `REQUEST_CHANGES` from `teamwork:reviewer` / `teamwork:challenger` fails the Gate.
+5. **Never Reuse Completed Subagents**: Once a subagent delivers its `handoff.md`, retire it and spawn a fresh subagent for subsequent tasks.
+6. **Succession at 16 Spawns**: If your total subagent spawn count reaches 16 and work remains, write a **Soft Handoff** to `.agents/teamwork/orchestrator_1/handoff.md` and return so Sentinel can spawn a fresh Generation 2 Orchestrator.
 
 ---
 

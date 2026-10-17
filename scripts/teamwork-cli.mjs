@@ -4,6 +4,7 @@
  * Supports:
  *   node scripts/teamwork-cli.mjs detect-env [--env <cloud|local>] [--workdir <dir>] [--copy-root-workflow]
  *   node scripts/teamwork-cli.mjs init [--workdir <dir>] [--mode <development|demo|benchmark>] [--env <cloud|local>]
+ *   node scripts/teamwork-cli.mjs watchdog <start|stop|status|pulse|daemon> [--window-min 30] [--interval-min 10] [--workdir <dir>]
  *   node scripts/teamwork-cli.mjs spawn <agent_id> <archetype> [--milestone <m>] [--workdir <dir>] [--worktree]
  *   node scripts/teamwork-cli.mjs validate-handoff <path-to-handoff.md>
  *   node scripts/teamwork-cli.mjs scan-integrity [--workdir <dir>] [--testdir <dir>]
@@ -11,8 +12,9 @@
  *   node scripts/teamwork-cli.mjs status [--workdir <dir>]
  */
 
-import { execSync } from 'node:child_process';
+import { execSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -37,6 +39,9 @@ function hasFlag(name) {
 
 const workdir = path.resolve(getFlag('--workdir', process.env.DEVIN_PROJECT_DIR || process.cwd()));
 const teamworkRoot = path.join(workdir, '.agents', 'teamwork');
+const watchdogPidPath = path.join(teamworkRoot, 'watchdog.pid');
+const watchdogJsonPath = path.join(teamworkRoot, 'watchdog.json');
+const watchdogLogPath = path.join(teamworkRoot, 'watchdog.log');
 const nowIso = new Date().toISOString();
 
 function ensureDir(dirPath) {
@@ -50,6 +55,187 @@ function writeIfMissing(filePath, content) {
     return true;
   }
   return false;
+}
+
+function isPidAlive(pid) {
+  if (!pid || Number.isNaN(Number(pid))) return false;
+  try {
+    process.kill(Number(pid), 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getWatchdogStatus() {
+  if (!fs.existsSync(watchdogPidPath)) {
+    return { running: false, pid: null, config: null };
+  }
+  const pid = Number(fs.readFileSync(watchdogPidPath, 'utf8').trim());
+  const alive = isPidAlive(pid);
+  let config = null;
+  if (fs.existsSync(watchdogJsonPath)) {
+    try {
+      config = JSON.parse(fs.readFileSync(watchdogJsonPath, 'utf8'));
+    } catch {
+      // ignore invalid json
+    }
+  }
+  return { running: alive, pid: alive ? pid : null, config };
+}
+
+function runWatchdogPulse(windowMin = 30, intervalMin = 10) {
+  ensureDir(teamworkRoot);
+  const ts = new Date().toISOString();
+  let sysSummary = `load=${os.loadavg().map((n) => n.toFixed(2)).join(',')} uptime=${Math.round(os.uptime())}s`;
+  try {
+    const gitOut = execSync('git status --short', { cwd: workdir, stdio: 'pipe', timeout: 4000 })
+      .toString()
+      .trim();
+    const changedCount = gitOut ? gitOut.split(/\r?\n/).length : 0;
+    sysSummary += ` changed_files=${changedCount}`;
+  } catch {
+    // ignore if not a git repo
+  }
+
+  const logLine = `[${ts}] [WATCH_DOG 30m KEEP-ALIVE] Orchestrator VM active (window=${windowMin}m, pulse=${intervalMin}m, pid=${process.pid}) | ${sysSummary}\n`;
+  fs.appendFileSync(watchdogLogPath, logLine, 'utf8');
+
+  const orchProgress = path.join(teamworkRoot, 'orchestrator_1', 'progress.md');
+  if (fs.existsSync(orchProgress)) {
+    fs.appendFileSync(
+      orchProgress,
+      `- [${ts}] [WATCH_DOG ${windowMin}m] Orchestrator VM keep-alive heartbeat (${sysSummary}).\n`,
+      'utf8'
+    );
+  }
+
+  if (fs.existsSync(watchdogJsonPath)) {
+    try {
+      const data = JSON.parse(fs.readFileSync(watchdogJsonPath, 'utf8'));
+      data.lastPulseAt = ts;
+      data.pulseCount = (data.pulseCount || 0) + 1;
+      fs.writeFileSync(watchdogJsonPath, JSON.stringify(data, null, 2), 'utf8');
+    } catch {
+      // ignore
+    }
+  }
+}
+
+function startWatchdogDaemon(windowMin = 30, intervalMin = 10, quiet = false) {
+  ensureDir(teamworkRoot);
+  const current = getWatchdogStatus();
+  if (current.running) {
+    if (!quiet) {
+      console.log(
+        `[WATCH_DOG] Already running (PID ${current.pid}, window=${windowMin}m, pulse=${intervalMin}m).`
+      );
+    }
+    return current;
+  }
+
+  const child = spawn(
+    process.execPath,
+    [
+      __filename,
+      'watchdog',
+      'daemon',
+      '--workdir',
+      workdir,
+      '--window-min',
+      String(windowMin),
+      '--interval-min',
+      String(intervalMin)
+    ],
+    {
+      cwd: workdir,
+      detached: true,
+      stdio: 'ignore'
+    }
+  );
+  child.unref();
+
+  const meta = {
+    pid: child.pid,
+    windowMinutes: windowMin,
+    intervalMinutes: intervalMin,
+    startedAt: new Date().toISOString(),
+    lastPulseAt: new Date().toISOString(),
+    pulseCount: 1,
+    workdir
+  };
+  fs.writeFileSync(watchdogPidPath, String(child.pid), 'utf8');
+  fs.writeFileSync(watchdogJsonPath, JSON.stringify(meta, null, 2), 'utf8');
+  runWatchdogPulse(windowMin, intervalMin);
+
+  if (!quiet) {
+    console.log(
+      `[WATCH_DOG] Started 30-min Orchestrator VM keep-alive daemon (PID ${child.pid}, window=${windowMin}m, pulse=${intervalMin}m).`
+    );
+  }
+  return { running: true, pid: child.pid, config: meta };
+}
+
+function stopWatchdogDaemon(quiet = false) {
+  const current = getWatchdogStatus();
+  if (current.running && current.pid) {
+    try {
+      process.kill(current.pid, 'SIGTERM');
+    } catch {
+      // ignore
+    }
+  }
+  if (fs.existsSync(watchdogPidPath)) {
+    fs.unlinkSync(watchdogPidPath);
+  }
+  if (!quiet) {
+    console.log('[WATCH_DOG] Stopped Orchestrator VM keep-alive daemon.');
+  }
+}
+
+function cmdWatchdog() {
+  const sub = args[1] || 'status';
+  const windowMin = Number(getFlag('--window-min', '30')) || 30;
+  const intervalMin = Number(getFlag('--interval-min', '10')) || 10;
+
+  if (sub === 'start') {
+    startWatchdogDaemon(windowMin, intervalMin, false);
+  } else if (sub === 'stop') {
+    stopWatchdogDaemon(false);
+  } else if (sub === 'pulse') {
+    runWatchdogPulse(windowMin, intervalMin);
+    console.log(`[WATCH_DOG] Manual keep-alive pulse recorded at ${ watchdogLogPath }`);
+  } else if (sub === 'daemon') {
+    const intervalMs = Math.max(1, intervalMin) * 60 * 1000;
+    const maxRuntimeMs = 12 * 60 * 60 * 1000; // 12 hours safety cap
+    const started = Date.now();
+    const timer = setInterval(() => {
+      if (Date.now() - started > maxRuntimeMs || !fs.existsSync(watchdogPidPath)) {
+        clearInterval(timer);
+        process.exit(0);
+      }
+      const sentinelHandoff = path.join(teamworkRoot, 'sentinel', 'handoff.md');
+      const gateStatus = path.join(teamworkRoot, 'orchestrator_1', 'GATE_STATUS.md');
+      if (
+        fs.existsSync(sentinelHandoff) &&
+        fs.existsSync(gateStatus) &&
+        /Gate Result:\s*\*\*PASS\*\*/i.test(fs.readFileSync(gateStatus, 'utf8'))
+      ) {
+        runWatchdogPulse(windowMin, intervalMin);
+        stopWatchdogDaemon(true);
+        clearInterval(timer);
+        process.exit(0);
+      }
+      runWatchdogPulse(windowMin, intervalMin);
+    }, intervalMs);
+  } else {
+    const st = getWatchdogStatus();
+    console.log(
+      st.running
+        ? `🟢 WATCH_DOG ACTIVE (PID ${st.pid}, window=${st.config?.windowMinutes || 30}m, pulse=${st.config?.intervalMinutes || 10}m, lastPulse=${st.config?.lastPulseAt || 'n/a'})`
+        : '⚪ WATCH_DOG INACTIVE'
+    );
+  }
 }
 
 function detectEnvironment() {
@@ -136,6 +322,8 @@ function detectEnvironment() {
     signals,
     hasDevinPythonSdk,
     workflowPath: workflowTarget,
+    watchdogWindowMinutes: 30,
+    watchdogPulseMinutes: 10,
     primaryEngine: isCloud
       ? 'Devin Dynamic Workflow (.agents/teamwork/workflow.py -> full | quick | survey | gate)'
       : 'Devin CLI Custom Subagents (teamwork:sentinel, teamwork:orchestrator, teamwork:explorer, teamwork:test-writer, teamwork:worker, teamwork:reviewer, teamwork:challenger, teamwork:forensic-auditor, teamwork:victory-auditor)',
@@ -158,9 +346,15 @@ function persistRuntimeAndProvisionWorkflow(envInfo, persistFiles = true) {
       }
     }
 
+    if (envInfo.runtime === 'DEVIN_CLOUD' || hasFlag('--start-watchdog')) {
+      startWatchdogDaemon(envInfo.watchdogWindowMinutes, envInfo.watchdogPulseMinutes, true);
+    }
+
+    const wdStatus = getWatchdogStatus();
+
     fs.writeFileSync(
       path.join(teamworkRoot, 'RUNTIME_ENV.json'),
-      JSON.stringify({ ...envInfo, updatedAt: nowIso }, null, 2),
+      JSON.stringify({ ...envInfo, watchdog: wdStatus, updatedAt: nowIso }, null, 2),
       'utf8'
     );
 
@@ -171,13 +365,21 @@ function persistRuntimeAndProvisionWorkflow(envInfo, persistFiles = true) {
 - **Primary Orchestration Engine**: ${envInfo.primaryEngine}
 - **Fallback / Companion Engine**: ${envInfo.fallbackEngine}
 - **Provisioned Cloud Workflow**: \`${fs.existsSync(envInfo.workflowPath) ? envInfo.workflowPath : 'not provisioned (CLI local)'}\`
+- **30-Min Orchestrator VM Watchdog (\`watch_dog\`)**: ${
+      wdStatus.running
+        ? `🟢 ACTIVE (PID \`${wdStatus.pid}\`, window=\`30m\`, pulse=\`10m\`, log=\`.agents/teamwork/watchdog.log\`)`
+        : '⚪ Standby'
+    }
 
-## Mandatory Execution Directive
+## Mandatory Execution & Watchdog Directive
 ${
   envInfo.runtime === 'DEVIN_CLOUD'
     ? `1. **DO NOT wait for the user to remind you to use workflow.py or Managed Devins.**
-2. **Primary Path (Dynamic Workflow)**: Execute \`.agents/teamwork/workflow.py\` using \`--mode full\` (for \`/team-run\`, \`/team-craft\`), \`--mode quick\` (for \`/team-quick\`), \`--mode survey\` (for \`/team-survey\`), or \`--mode gate\` (for \`/team-gate\`, \`/team-audit\`). Copy \`.agents/teamwork/workflow.py\` to \`./workflow.py\` only if the workflow runner requires root placement.
-3. **Automatic Fallback (Managed Devins)**: If the Dynamic Workflow runner is not active in this session, immediately dispatch parallel child Devin sessions via \`devin_session_create\` + \`devin_session_gather\` (and set a cron heartbeat via \`devin_schedule_manage\`).`
+2. **30-Minute Orchestrator VM Watchdog (\`watch_dog\`)**:
+   - The local VM keep-alive daemon (\`node "${path.join(pluginRoot, 'scripts', 'teamwork-cli.mjs')}" watchdog start --window-min 30 --interval-min 10\`) is automatically active to prevent the primary Orchestrator VM from dropping due to 30-minute idle timeouts while waiting for child sessions.
+   - When using **Managed Devins** (\`devin_session_create\` / \`devin_session_gather\`), ALSO register a session-level \`watch_dog\` cron schedule via \`devin_schedule_manage\` (\`*/20 * * * *\` — inside the 30-minute window) or self-reminder so the Orchestrator session wakes up periodically, pulses \`.agents/teamwork/watchdog.log\`, and checks child sessions until Victory Audit completes.
+3. **Primary Path (Dynamic Workflow)**: Execute \`.agents/teamwork/workflow.py\` using \`--mode full\` (for \`/team-run\`, \`/team-craft\`), \`--mode quick\` (for \`/team-quick\`), \`--mode survey\` (for \`/team-survey\`), or \`--mode gate\` (for \`/team-gate\`, \`/team-audit\`). Copy \`.agents/teamwork/workflow.py\` to \`./workflow.py\` only if the workflow runner requires root placement.
+4. **Automatic Fallback (Managed Devins)**: If the Dynamic Workflow runner is not active in this session, immediately dispatch parallel child Devin sessions via \`devin_session_create\` + \`devin_session_gather\` with the 30-minute \`watch_dog\` schedule active.`
     : `1. **Local CLI Mode Active**: Dispatch subagents using the custom profiles in \`agents/*.md\` (\`teamwork:sentinel\`, \`teamwork:orchestrator\`, \`teamwork:explorer\`, \`teamwork:test-writer\`, \`teamwork:worker\`, \`teamwork:reviewer\`, \`teamwork:challenger\`, \`teamwork:forensic-auditor\`, \`teamwork:victory-auditor\`).
 2. **Worktree Isolation**: Use \`node "${path.join(pluginRoot, 'scripts', 'teamwork-cli.mjs')}" spawn <agent_id> <archetype> --milestone <M> --worktree\` when branch isolation is desired.`
 }
@@ -190,6 +392,7 @@ function cmdDetectEnv() {
   const envInfo = detectEnvironment();
   const shouldPersist = !hasFlag('--no-write');
   persistRuntimeAndProvisionWorkflow(envInfo, shouldPersist);
+  const wdStatus = getWatchdogStatus();
 
   console.log(`[TEAMWORK RUNTIME AUTO-DETECTED: ${envInfo.runtime}]`);
   console.log(`- Signals: ${envInfo.signals.join(', ')}`);
@@ -198,7 +401,12 @@ function cmdDetectEnv() {
   if (envInfo.runtime === 'DEVIN_CLOUD') {
     console.log(`- Provisioned Workflow: ${envInfo.workflowPath}`);
     console.log(
-      `ACTION REQUIRED: Automatically run Dynamic Workflow (.agents/teamwork/workflow.py --mode <full|quick|survey|gate>) or fallback to Managed Devins (devin_session_create / devin_session_gather) WITHOUT asking the user.`
+      `- 30-Min Orchestrator Watchdog (watch_dog): ${
+        wdStatus.running ? `ACTIVE (PID ${wdStatus.pid}, window=30m, pulse=10m)` : 'STANDBY'
+      }`
+    );
+    console.log(
+      `ACTION REQUIRED: Automatically run Dynamic Workflow (.agents/teamwork/workflow.py --mode <full|quick|survey|gate>) or fallback to Managed Devins (devin_session_create / devin_session_gather + devin_schedule_manage */20 * * * * watch_dog) WITHOUT asking the user.`
     );
   }
 }
@@ -211,6 +419,7 @@ function cmdInit() {
   ensureDir(path.join(teamworkRoot, 'orchestrator_1'));
 
   persistRuntimeAndProvisionWorkflow(envInfo, true);
+  const wdStatus = getWatchdogStatus();
 
   writeIfMissing(
     path.join(teamworkRoot, 'ORIGINAL_REQUEST.md'),
@@ -219,12 +428,17 @@ function cmdInit() {
 
   writeIfMissing(
     path.join(teamworkRoot, 'sentinel', 'BRIEFING.md'),
-    `# BRIEFING — ${nowIso}\n\n## Mission\nSupervise end-to-end execution of the project via project orchestrator and mandatory victory auditor.\n\n## 🔒 My Identity\n- Archetype: sentinel\n- Runtime environment: ${envInfo.runtime}\n- Primary Engine: ${envInfo.primaryEngine}\n- Working directory: ${path.join(teamworkRoot, 'sentinel')}\n- Orchestrator: orchestrator_1\n- Victory Auditor: to be spawned on victory claim\n\n## 🔒 Key Constraints\n- No technical decisions — relay only\n- Victory Audit is MANDATORY before reporting completion\n- Must not write production code\n\n## Victory Audit Status\n- **Triggered**: no\n- **Verdict**: pending\n- **Retry count**: 0\n`
+    `# BRIEFING — ${nowIso}\n\n## Mission\nSupervise end-to-end execution of the project via project orchestrator and mandatory victory auditor.\n\n## 🔒 My Identity\n- Archetype: sentinel\n- Runtime environment: ${envInfo.runtime}\n- Primary Engine: ${envInfo.primaryEngine}\n- Orchestrator VM Watchdog (watch_dog): 30m window (pulse every 10m)\n- Working directory: ${path.join(teamworkRoot, 'sentinel')}\n- Orchestrator: orchestrator_1\n- Victory Auditor: to be spawned on victory claim\n\n## 🔒 Key Constraints\n- No technical decisions — relay only\n- Keep 30-minute watch_dog active in Devin Cloud so the primary VM never drops while waiting for child sessions\n- Victory Audit is MANDATORY before reporting completion\n- Must not write production code\n\n## Victory Audit Status\n- **Triggered**: no\n- **Verdict**: pending\n- **Retry count**: 0\n`
   );
 
   writeIfMissing(
     path.join(teamworkRoot, 'orchestrator_1', 'BRIEFING.md'),
-    `# BRIEFING — ${nowIso}\n\n## Mission\nOrchestrate the project ensuring 100% acceptance criteria pass.\n\n## 🔒 My Identity\n- Archetype: orchestrator\n- Runtime environment: ${envInfo.runtime}\n- Primary Engine: ${envInfo.primaryEngine}\n- Fallback Engine: ${envInfo.fallbackEngine}\n- Roles: orchestrator, user_liaison, human_reporter, successor\n- Working directory: ${path.join(teamworkRoot, 'orchestrator_1')}\n- Original parent: Sentinel\n\n## 🔒 My Workflow\n- **Pattern**: Project Pattern (Dual Track: Implementation Track + E2E Testing Track)\n- **Scope document**: ${path.join(teamworkRoot, 'orchestrator_1', 'PROJECT.md')}\n- **Cloud Workflow**: ${path.join(teamworkRoot, 'workflow.py')}\n- **Work items**:\n  1. Phase 0: Survey and Scope Mapping [in-progress]\n  2. E2E Testing Track Setup [pending]\n  3. Implementation Milestones [pending]\n  4. Final Milestone E2E, Adversarial Hardening & Forensic Audit [pending]\n\n## 🔒 Key Constraints\n- Dispatch-only orchestrator: NEVER write source code, delegate all investigation/code/testing.\n- Zero tolerance for cheating/integrity violations (Auditor has binary veto).\n- Never reuse a subagent after it has delivered its handoff — always spawn fresh.\n\n## Team Roster\n| Agent | Type | Work Item | Status |\n|-------|------|-----------|--------|\n`
+    `# BRIEFING — ${nowIso}\n\n## Mission\nOrchestrate the project ensuring 100% acceptance criteria pass.\n\n## 🔒 My Identity\n- Archetype: orchestrator\n- Runtime environment: ${envInfo.runtime}\n- Primary Engine: ${envInfo.primaryEngine}\n- Fallback Engine: ${envInfo.fallbackEngine}\n- Orchestrator VM Watchdog (watch_dog): 30m window (pulse every 10m, PID=${wdStatus.pid || 'auto'})\n- Roles: orchestrator, user_liaison, human_reporter, successor\n- Working directory: ${path.join(teamworkRoot, 'orchestrator_1')}\n- Original parent: Sentinel\n\n## 🔒 My Workflow\n- **Pattern**: Project Pattern (Dual Track: Implementation Track + E2E Testing Track)\n- **Scope document**: ${path.join(teamworkRoot, 'orchestrator_1', 'PROJECT.md')}\n- **Cloud Workflow**: ${path.join(teamworkRoot, 'workflow.py')}\n- **Work items**:\n  1. Phase 0: Survey and Scope Mapping [in-progress]\n  2. E2E Testing Track Setup [pending]\n  3. Implementation Milestones [pending]\n  4. Final Milestone E2E, Adversarial Hardening & Forensic Audit [pending]\n\n## 🔒 Key Constraints\n- Dispatch-only orchestrator: NEVER write source code, delegate all investigation/code/testing.\n- Keep the 30-minute watch_dog active (local daemon + devin_schedule_manage */20 * * * *) so the primary Orchestrator VM never times out.\n- Zero tolerance for cheating/integrity violations (Auditor has binary veto).\n- Never reuse a subagent after it has delivered its handoff — always spawn fresh.\n\n## Team Roster\n| Agent | Type | Work Item | Status |\n|-------|------|-----------|--------|\n`
+  );
+
+  writeIfMissing(
+    path.join(teamworkRoot, 'orchestrator_1', 'progress.md'),
+    `# Progress — orchestrator_1\n\n- [${nowIso}] Initialized orchestrator_1 (${envInfo.runtime}, watch_dog=30m window).\n`
   );
 
   writeIfMissing(
@@ -241,6 +455,9 @@ function cmdInit() {
   console.log(`Detected Runtime: ${envInfo.runtime} (${envInfo.primaryEngine})`);
   if (fs.existsSync(envInfo.workflowPath)) {
     console.log(`Provisioned Cloud Dynamic Workflow at: ${envInfo.workflowPath}`);
+  }
+  if (wdStatus.running) {
+    console.log(`30-Min Orchestrator VM Watchdog (watch_dog): ACTIVE (PID ${wdStatus.pid}, pulse=10m)`);
   }
 }
 
@@ -417,6 +634,7 @@ function cmdCheckGate() {
 
 function cmdStatus() {
   const envInfo = detectEnvironment();
+  const wdStatus = getWatchdogStatus();
   console.log('# Teamwork Mission Dashboard\n');
   console.log(`- **Active Runtime**: \`${envInfo.runtime}\` (${envInfo.signals.join(', ')})`);
   console.log(`- **Primary Engine**: ${envInfo.primaryEngine}`);
@@ -424,6 +642,13 @@ function cmdStatus() {
   console.log(
     `- **Cloud Workflow (\`.agents/teamwork/workflow.py\`)**: ${
       fs.existsSync(envInfo.workflowPath) ? '✅ Provisioned' : '— Not provisioned'
+    }`
+  );
+  console.log(
+    `- **30-Min Orchestrator VM Watchdog (\`watch_dog\`)**: ${
+      wdStatus.running
+        ? `🟢 ACTIVE (PID ${wdStatus.pid}, window=${wdStatus.config?.windowMinutes || 30}m, pulse=${wdStatus.config?.intervalMinutes || 10}m, pulses=${wdStatus.config?.pulseCount || 1})`
+        : '⚪ Inactive'
     }\n`
   );
 
@@ -459,6 +684,9 @@ switch (command) {
     break;
   case 'init':
     cmdInit();
+    break;
+  case 'watchdog':
+    cmdWatchdog();
     break;
   case 'spawn':
     cmdSpawn();

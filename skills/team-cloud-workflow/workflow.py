@@ -1,5 +1,8 @@
 """
 Teamwork Deterministic Dynamic Workflows for Devin Cloud
+Includes built-in 30-Minute Orchestrator VM Watchdog (`watch_dog`) to prevent the primary
+Orchestrator VM from dropping due to idle timeouts while waiting for parallel child sessions.
+
 Supports 4 workflow modes via `--mode <full|quick|survey|gate>` or `TEAMWORK_WORKFLOW_MODE`:
   - `full`   (/team-run, /team-craft): Phase 0 Survey -> Phase 1 Dual-Track -> Phase 2 Gate -> Phase 3 Remediation -> Phase 4 Victory Audit
   - `quick`  (/team-quick): 1 Worker -> Parallel Adversarial Reviewer + Binary Forensic Auditor loop
@@ -8,14 +11,20 @@ Supports 4 workflow modes via `--mode <full|quick|survey|gate>` or `TEAMWORK_WOR
 """
 
 import asyncio
+import datetime
 import json
 import os
+import subprocess
 import sys
+
+# 30-Minute Orchestrator VM Watchdog Configuration
+WATCHDOG_WINDOW_MINUTES = 30
+WATCHDOG_PULSE_SECONDS = 600  # Pulses every 10 min (3x per 30-min idle window)
 
 WORKFLOW_MODES = {
     "full": {
         "name": "teamwork-full-pipeline",
-        "description": "Autonomous Teamwork Dual-Track pipeline with 4-tier E2E testing, adversarial challenge, and binary forensic integrity audit",
+        "description": "Autonomous Teamwork Dual-Track pipeline with 30m VM watch_dog, 4-tier E2E testing, adversarial challenge, and binary forensic integrity audit",
         "phases": [
             {"title": "survey", "detail": "Phase 0: Parallel Explorer survey and PROJECT.md contract synthesis"},
             {"title": "dual_track", "detail": "Phase 1: Parallel E2E Test Track (Tiers 1-4) and Milestone Workers"},
@@ -26,7 +35,7 @@ WORKFLOW_MODES = {
     },
     "quick": {
         "name": "teamwork-quick-pipeline",
-        "description": "Compact Teamwork loop: 1 Worker + Parallel Adversarial Reviewer & Binary Forensic Auditor",
+        "description": "Compact Teamwork loop with 30m VM watch_dog: 1 Worker + Parallel Adversarial Reviewer & Binary Forensic Auditor",
         "phases": [
             {"title": "implementation", "detail": "Step 1: Focused Worker implementation with genuine tests"},
             {"title": "gate_verification", "detail": "Step 2: Parallel Adversarial Reviewer and Binary Forensic Auditor"},
@@ -110,6 +119,44 @@ def resolve_mode() -> str:
             return sys.argv[idx + 1]
     env_mode = os.environ.get("TEAMWORK_WORKFLOW_MODE", "full").strip().lower()
     return env_mode if env_mode in WORKFLOW_MODES else "full"
+
+
+async def orchestrator_vm_watchdog():
+    """
+    Background 30-minute watch_dog loop running inside the primary Orchestrator VM.
+    Emits a disk + process + workflow log heartbeat every 10 minutes (3x per 30m window)
+    so the primary Orchestrator VM never gets suspended for inactivity while awaiting child VMs.
+    """
+    teamwork_dir = os.path.join(os.getcwd(), ".agents", "teamwork")
+    os.makedirs(teamwork_dir, exist_ok=True)
+    watchdog_log = os.path.join(teamwork_dir, "watchdog.log")
+    progress_md = os.path.join(teamwork_dir, "orchestrator_1", "progress.md")
+    pulse_count = 0
+
+    while True:
+        await asyncio.sleep(WATCHDOG_PULSE_SECONDS)
+        pulse_count += 1
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        try:
+            subprocess.run(["git", "status", "--short"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+        except Exception:
+            pass
+
+        entry = (
+            f"[{now_iso}] [WATCH_DOG {WATCHDOG_WINDOW_MINUTES}m KEEP-ALIVE] "
+            f"Primary Orchestrator VM active (pulse #{pulse_count}, interval={WATCHDOG_PULSE_SECONDS}s)\n"
+        )
+        try:
+            with open(watchdog_log, "a", encoding="utf-8") as f:
+                f.write(entry)
+            if os.path.exists(progress_md):
+                with open(progress_md, "a", encoding="utf-8") as pf:
+                    pf.write(f"- {entry}")
+        except Exception:
+            pass
+
+        if "log" in globals():
+            log(f"[WATCH_DOG 30m KEEP-ALIVE] Orchestrator VM active (pulse #{pulse_count})")
 
 
 async def run_survey_explorer(idx: int, focus: str):
@@ -293,14 +340,18 @@ async def main():
     meta = WORKFLOW_MODES[mode]
     await register_workflow(meta)
 
-    if mode == "survey":
-        await execute_survey_workflow()
-    elif mode == "quick":
-        await execute_quick_workflow()
-    elif mode == "gate":
-        await run_gate(1, include_challenger=True)
-    else:
-        await execute_full_workflow()
+    watchdog_task = asyncio.create_task(orchestrator_vm_watchdog())
+    try:
+        if mode == "survey":
+            await execute_survey_workflow()
+        elif mode == "quick":
+            await execute_quick_workflow()
+        elif mode == "gate":
+            await run_gate(1, include_challenger=True)
+        else:
+            await execute_full_workflow()
+    finally:
+        watchdog_task.cancel()
 
 
 if __name__ == "__main__":
@@ -310,6 +361,8 @@ if __name__ == "__main__":
             "workflow_file": os.path.abspath(__file__),
             "supported_modes": list(WORKFLOW_MODES.keys()),
             "selected_mode": resolve_mode(),
+            "watchdog_window_minutes": WATCHDOG_WINDOW_MINUTES,
+            "watchdog_pulse_seconds": WATCHDOG_PULSE_SECONDS,
             "runner_injected_globals": has_globals,
         }))
         sys.exit(0)

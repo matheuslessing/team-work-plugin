@@ -93,25 +93,31 @@ All skills are prefixed with `team-` so they group cleanly in the `/` autocomple
 
 ---
 
-## Automatic Runtime Detection (`DEVIN_CLOUD` vs `DEVIN_CLI_LOCAL`)
+## Automatic Runtime Detection & 30-Minute Orchestrator VM Watchdog (`watch_dog`)
 
-You never have to remind Devin Cloud that it can use `workflow.py` or Managed Devins. Detection happens automatically in 4 layers:
-1. **`UserPromptSubmit` Hook (`hooks.json`)**: On every prompt, inspects environment variables (`DEVIN_CLOUD`, `DEVIN_SESSION_ID`, `DEVIN_VM`, `DEVIN_ORG_ID`, `TEAMWORK_RUNTIME`), `/home/ubuntu` Cloud VM markers, and `.agents/teamwork/RUNTIME_ENV.json` to inject the active runtime directive directly into the model's context.
-2. **Always-On Rule (`rules/runtime-detection.md`)**: Loaded into the system prompt of every session, instructing Devin Cloud to prioritize `.agents/teamwork/workflow.py` (`--mode full|quick|survey|gate`) and automatically fall back to **Managed Devins** (`devin_session_create` + `devin_session_gather` + `devin_schedule_manage`) if the workflow runner is not active.
-3. **Mandatory `Step 0` in all `/team-*` Skills**: Every skill executes `teamwork-cli.mjs init` or `detect-env` first, provisioning `.agents/teamwork/workflow.py` automatically when in Cloud (keeping the project root clean unless root placement is required).
-4. **CLI Detector & Override (`scripts/teamwork-cli.mjs detect-env`)**: Supports automatic detection plus manual pinning (`--env cloud` or `--env local`), and displays the active runtime in `/team-status` and all `BRIEFING.md` files.
+You never have to remind Devin Cloud that it can use `workflow.py` or Managed Devins, and the primary Orchestrator VM is protected against 30-minute inactivity drops:
+1. **30-Minute Orchestrator VM Watchdog (`watch_dog`)**:
+   - In **Devin Cloud**, when the primary Orchestrator VM waits for parallel child sessions (`devin_session_gather` or long-running VMs), it can be suspended if idle for 30 minutes.
+   - To prevent this, Teamwork automatically starts a **3-layer `watch_dog`** configured for a **30-minute protection window** (pulsing every **10 minutes** — 3x per 30-minute window):
+     - **Layer A (OS/VM Background Daemon)**: `teamwork-cli.mjs init`, `detect-env`, and `hooks.json` (`UserPromptSubmit`) automatically spawn a detached background daemon (`node scripts/teamwork-cli.mjs watchdog start --window-min 30 --interval-min 10`) that writes heartbeats to `.agents/teamwork/watchdog.log` and `.agents/teamwork/orchestrator_1/progress.md` and executes lightweight git/OS checks so the hypervisor sees continuous activity. Automatically stops when `sentinel/handoff.md` + `Gate Result: PASS` complete.
+     - **Layer B (`workflow.py` Async Task)**: `orchestrator_vm_watchdog()` runs concurrently inside `.agents/teamwork/workflow.py` (`WATCHDOG_WINDOW_MINUTES = 30`, `WATCHDOG_PULSE_SECONDS = 600`) across all `parallel()` and `agent()` calls.
+     - **Layer C (Session Cron Schedule)**: `devin_schedule_manage` (`*/20 * * * *`) wakes the parent Orchestrator session inside the 30-minute window while awaiting child sessions.
+2. **`UserPromptSubmit` Hook (`hooks.json`)**: On every prompt, detects `DEVIN_CLOUD` vs `DEVIN_CLI_LOCAL`, ensures the 30-minute `watch_dog` is running in Cloud, and injects the active runtime directive directly into the model's context.
+3. **Always-On Rule (`rules/runtime-detection.md`)**: Loaded into the system prompt of every session, instructing Devin Cloud to prioritize `.agents/teamwork/workflow.py` (`--mode full|quick|survey|gate`) and automatically fall back to **Managed Devins** (`devin_session_create` + `devin_session_gather` + `devin_schedule_manage`).
+4. **CLI Detector & Watchdog Controller (`scripts/teamwork-cli.mjs`)**: Supports automatic detection, manual pinning (`--env cloud|local`), and direct `watchdog` control, displaying active status in `/team-status`.
 
 ---
 
 ## Lifecycle Hooks & CLI Utility
 
-- **`UserPromptSubmit` Hook (`hooks.json`)**: Automatically detects `DEVIN_CLOUD` vs `DEVIN_CLI_LOCAL` and injects the exact orchestration engine instructions before the agent responds.
+- **`UserPromptSubmit` Hook (`hooks.json`)**: Automatically detects `DEVIN_CLOUD` vs `DEVIN_CLI_LOCAL`, auto-starts the 30-minute `watch_dog` daemon in Cloud, and injects orchestration instructions.
 - **`PostCompaction` Hook (`hooks.json`)**: Automatically re-injects `RUNTIME_ENV.md`, `ORIGINAL_REQUEST.md`, `BRIEFING.md`, `PROJECT.md`, and `GATE_STATUS.md` into the agent's context whenever context compaction occurs.
 - **`Stop` Hook (`hooks.json`)**: Warns if an orchestrator attempts to stop while `GATE_STATUS.md` still reports `FAIL` on an in-progress mission.
-- **`scripts/teamwork-cli.mjs`**: Zero-dependency Node.js helper for runtime auto-detection, `.agents/teamwork/workflow.py` provisioning, workspace initialization, isolated git worktree creation, 5-Component `handoff.md` validation, static forensic integrity scanning, and status reporting:
+- **`scripts/teamwork-cli.mjs`**: Zero-dependency Node.js helper for runtime auto-detection, 30-minute `watch_dog` daemon management, `.agents/teamwork/workflow.py` provisioning, workspace initialization, isolated git worktree creation, 5-Component `handoff.md` validation, static forensic integrity scanning, and status reporting:
   ```bash
   node scripts/teamwork-cli.mjs detect-env [--env cloud|local]
   node scripts/teamwork-cli.mjs init [--env cloud|local]
+  node scripts/teamwork-cli.mjs watchdog <start|stop|status|pulse> [--window-min 30] [--interval-min 10]
   node scripts/teamwork-cli.mjs spawn worker_m1 implementer --milestone M1 --worktree
   node scripts/teamwork-cli.mjs validate-handoff .agents/teamwork/worker_m1/handoff.md
   node scripts/teamwork-cli.mjs scan-integrity

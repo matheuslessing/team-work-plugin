@@ -85,12 +85,14 @@ Every subagent (`explorer`, `test-writer`, `worker`, `reviewer`, `challenger`, `
 
 ---
 
-## 5. Automatic Runtime Detection (`DEVIN_CLOUD` vs `DEVIN_CLI_LOCAL`)
+## 5. Automatic Runtime Detection & 30-Minute Orchestrator VM Watchdog (`watch_dog`)
 
 All `/team-*` commands automatically detect whether they are running in **Devin Cloud** or **Devin CLI Local** via `rules/runtime-detection.md`, the `UserPromptSubmit` hook in `hooks.json`, and `node "${PLUGIN_ROOT}/scripts/teamwork-cli.mjs" detect-env` (with manual override `--env cloud|local` or `TEAMWORK_RUNTIME=cloud|local`). **Never wait for the user to remind you to use `workflow.py` or Managed Devins in Devin Cloud.**
 
 1. **When `DEVIN_CLOUD` is Detected**:
-   - `teamwork-cli.mjs init` / `detect-env` automatically provisions `.agents/teamwork/workflow.py` (keeping the repository root clean) and writes `.agents/teamwork/RUNTIME_ENV.md`.
+   - **30-Minute Orchestrator VM Watchdog (`watch_dog`) — Mandatory Anti-Idle Protection**:
+     - To prevent the primary Orchestrator/Sentinel VM from dropping due to 30-minute inactivity timeouts while waiting for child VMs/sessions, `teamwork-cli.mjs init`, `detect-env`, and `hooks.json` automatically launch a detached background keep-alive daemon (`node "${PLUGIN_ROOT}/scripts/teamwork-cli.mjs" watchdog start --window-min 30 --interval-min 10`) that pulses `.agents/teamwork/watchdog.log`, `.agents/teamwork/orchestrator_1/progress.md`, and OS/git activity 3 times per 30-minute window.
+     - In addition, `.agents/teamwork/workflow.py` runs an async `orchestrator_vm_watchdog()` background loop (`WATCHDOG_WINDOW_MINUTES = 30`, `WATCHDOG_PULSE_SECONDS = 600`), and Managed Devins sessions register a `watch_dog` cron via `devin_schedule_manage` (`*/20 * * * *`) so the parent session wakes up inside the 30-minute window.
    - **Primary Engine — Devin Dynamic Workflow (`.agents/teamwork/workflow.py`)**:
      Automatically execute `.agents/teamwork/workflow.py` with the mode matching the command:
      - `--mode full` (`/team-run`, `/team-craft`)
@@ -99,6 +101,6 @@ All `/team-*` commands automatically detect whether they are running in **Devin 
      - `--mode gate` (`/team-gate`, `/team-audit`)
      Copy `.agents/teamwork/workflow.py` to `./workflow.py` only if the active workflow runner requires root placement.
    - **Automatic Fallback — Managed Devins (`devin_session_create`)**:
-     If the Dynamic Workflow runner is not active in the current session, immediately and automatically fall back to **Managed Devins / Devin MCP** (`devin_session_create`, `devin_session_interact`, `devin_session_gather`, `devin_schedule_manage`).
+     If the Dynamic Workflow runner is not active in the current session, immediately and automatically fall back to **Managed Devins / Devin MCP** (`devin_session_create`, `devin_session_interact`, `devin_session_gather`, `devin_schedule_manage` with `*/20 * * * *` `watch_dog`).
 2. **When `DEVIN_CLI_LOCAL` is Detected**:
    - Subagents are spawned using the custom profiles in `agents/*.md` (`teamwork:sentinel`, `teamwork:orchestrator`, `teamwork:explorer`, `teamwork:test-writer`, `teamwork:worker`, `teamwork:reviewer`, `teamwork:challenger`, `teamwork:forensic-auditor`, `teamwork:victory-auditor`) and optional local git worktrees (`--worktree`).
