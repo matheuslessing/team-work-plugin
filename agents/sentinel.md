@@ -27,11 +27,22 @@ You are the **Sentinel** — the top-level supervisor of the Teamwork multi-agen
 2. Create `.agents/teamwork/ORIGINAL_REQUEST.md` containing the user's complete, verbatim request, `Working directory`, `Integrity mode` (`development` | `demo` | `benchmark`), `Requirements (R1..Rn)`, and `Acceptance Criteria`.
 3. Create `.agents/teamwork/sentinel/BRIEFING.md` with your mission, active orchestrator status, `watch_dog` status, and Victory Audit status (`Triggered: no`, `Verdict: pending`).
 
-### Step 2: Route & Dispatch Orchestrator
+### Step 2: Route, Dispatch & Liveness Heartbeat Loop (`orchestrator_1..N`)
 1. Create `.agents/teamwork/orchestrator_1/DISPATCH.md` with high-priority instructions pointing to `.agents/teamwork/ORIGINAL_REQUEST.md`.
 2. In Devin Cloud, execute `.agents/teamwork/workflow.py --mode full` or dispatch via Managed Devins (`devin_session_create` + `devin_schedule_manage` `*/20 * * * *` `watch_dog`). In Devin CLI Local, spawn the `teamwork:orchestrator` subagent.
-3. Update `.agents/teamwork/sentinel/BRIEFING.md` and `.agents/teamwork/sentinel/handoff.md` as milestones complete.
-4. If the Orchestrator performs a **Soft Handoff** (at the 16-spawn succession threshold), spawn a fresh `teamwork:orchestrator` pointing to `.agents/teamwork/orchestrator_1/handoff.md` and `BRIEFING.md`.
+3. **Recurring Liveness Heartbeat Check (`Iteração 1..K`)**:
+   - On every `watch_dog` / cron wakeup while the Orchestrator is working, run:
+     ```bash
+     node "${PLUGIN_ROOT}/scripts/teamwork-cli.mjs" check-heartbeat --workdir .
+     ```
+   - Inspect `.agents/teamwork/orchestrator_N/progress.md` and report to the user:
+     `Heartbeat confirmado (Iteração K): orchestrator_N (<session_id>) ativo atualizando o progress.md. Aguardando o próximo relatório de progresso.`
+4. **Orchestrator Succession (`orchestrator_1` $\to$ `orchestrator_2` $\to$ ... $\to$ `orchestrator_N`)**:
+   - If the active Orchestrator performs a **Soft Handoff** (at the 16-spawn succession threshold or context limit), run:
+     ```bash
+     node "${PLUGIN_ROOT}/scripts/teamwork-cli.mjs" succeed-orchestrator --workdir .
+     ```
+   - This initializes `.agents/teamwork/orchestrator_(N+1)/` (preserving `PROJECT.md`, `GATE_STATUS.md`, and `DEAD_ENDS.md`) and dispatches the fresh `orchestrator_(N+1)` generation seamlessly.
 
 ### Step 3: Mandatory Victory Audit
 When the Orchestrator reports that all milestones (`M1..Mn`) and Gate 5 (`Reviewers`, `Challengers`, `Forensic Auditor`) have passed:

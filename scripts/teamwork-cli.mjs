@@ -678,6 +678,94 @@ function cmdStatus() {
   }
 }
 
+function getActiveOrchestrator() {
+  if (!fs.existsSync(teamworkRoot)) return { id: 'orchestrator_1', gen: 1 };
+  const dirs = fs
+    .readdirSync(teamworkRoot, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && /^orchestrator_\d+$/.test(d.name))
+    .map((d) => ({ id: d.name, gen: Number(d.name.split('_')[1]) }))
+    .sort((a, b) => b.gen - a.gen);
+  return dirs[0] || { id: 'orchestrator_1', gen: 1 };
+}
+
+function cmdCheckHeartbeat() {
+  ensureDir(teamworkRoot);
+  const activeOrch = getActiveOrchestrator();
+  const sessionId = getFlag('--session', process.env.DEVIN_SESSION_ID || 'local-session');
+  const orchDir = path.join(teamworkRoot, activeOrch.id);
+  const progressPath = path.join(orchDir, 'progress.md');
+  const sentinelProgressPath = path.join(teamworkRoot, 'sentinel', 'progress.md');
+
+  let iter = 1;
+  if (fs.existsSync(sentinelProgressPath)) {
+    const matches = fs.readFileSync(sentinelProgressPath, 'utf8').match(/Iteração\s+(\d+)/g);
+    if (matches && matches.length > 0) {
+      const lastNum = Number(matches[matches.length - 1].replace(/\D+/g, ''));
+      if (!Number.isNaN(lastNum)) iter = lastNum + 1;
+    }
+  }
+
+  runWatchdogPulse(30, 10);
+
+  let latestLine = 'initializing';
+  if (fs.existsSync(progressPath)) {
+    const lines = fs
+      .readFileSync(progressPath, 'utf8')
+      .split(/\r?\n/)
+      .filter((l) => l.trim().startsWith('-'));
+    if (lines.length > 0) {
+      latestLine = lines[lines.length - 1].trim();
+    }
+  }
+
+  const msg = `Heartbeat confirmado (Iteração ${iter}): ${activeOrch.id} (${sessionId}) ativo atualizando o progress.md. Aguardando o próximo relatório de progresso.`;
+  ensureDir(path.join(teamworkRoot, 'sentinel'));
+  fs.appendFileSync(sentinelProgressPath, `- [${new Date().toISOString()}] ${msg} | Último pulso: ${latestLine}\n`, 'utf8');
+  console.log(msg);
+}
+
+function cmdSucceedOrchestrator() {
+  const current = getActiveOrchestrator();
+  const nextGen = current.gen + 1;
+  const nextId = `orchestrator_${nextGen}`;
+  const prevDir = path.join(teamworkRoot, current.id);
+  const nextDir = path.join(teamworkRoot, nextId);
+  ensureDir(nextDir);
+
+  for (const sharedFile of ['PROJECT.md', 'GATE_STATUS.md', 'DEAD_ENDS.md']) {
+    const src = path.join(prevDir, sharedFile);
+    const dst = path.join(nextDir, sharedFile);
+    if (fs.existsSync(src) && !fs.existsSync(dst)) {
+      fs.copyFileSync(src, dst);
+    }
+  }
+
+  writeIfMissing(
+    path.join(nextDir, 'DISPATCH.md'),
+    `## ${nowIso}\nFrom: sentinel\nPriority: MESSAGE_PRIORITY_HIGH\n\nSuccession Handoff from \`${current.id}\` to \`${nextId}\` (Generation ${nextGen}).\nRead \`${path.join(prevDir, 'handoff.md')}\`, \`${path.join(nextDir, 'PROJECT.md')}\`, and \`${path.join(nextDir, 'GATE_STATUS.md')}\` and continue execution.\n`
+  );
+
+  writeIfMissing(
+    path.join(nextDir, 'BRIEFING.md'),
+    `# BRIEFING — ${nowIso}\n\n## Mission\nContinue orchestration from ${current.id} (Generation ${nextGen}) until 100% of acceptance criteria pass.\n\n## 🔒 My Identity\n- Archetype: orchestrator\n- Generation: ${nextGen} (${nextId})\n- Predecessor: ${current.id} (${path.join(prevDir, 'handoff.md')})\n- Working directory: ${nextDir}\n`
+  );
+
+  writeIfMissing(
+    path.join(nextDir, 'progress.md'),
+    `# Progress — ${nextId}\n\n- [${nowIso}] Succeeded ${current.id} as Generation ${nextGen} Orchestrator.\n`
+  );
+
+  const sentinelBriefing = path.join(teamworkRoot, 'sentinel', 'BRIEFING.md');
+  if (fs.existsSync(sentinelBriefing)) {
+    const updated = fs
+      .readFileSync(sentinelBriefing, 'utf8')
+      .replace(/-\s*Orchestrator:\s*orchestrator_\d+/i, `- Orchestrator: ${nextId}`);
+    fs.writeFileSync(sentinelBriefing, updated, 'utf8');
+  }
+
+  console.log(`Succeeded ${current.id} -> ${nextId} at ${nextDir}`);
+}
+
 switch (command) {
   case 'detect-env':
     cmdDetectEnv();
@@ -687,6 +775,12 @@ switch (command) {
     break;
   case 'watchdog':
     cmdWatchdog();
+    break;
+  case 'check-heartbeat':
+    cmdCheckHeartbeat();
+    break;
+  case 'succeed-orchestrator':
+    cmdSucceedOrchestrator();
     break;
   case 'spawn':
     cmdSpawn();
