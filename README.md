@@ -20,28 +20,36 @@ flowchart TD
     User["User Prompt / Feature Request"] --> Sentinel["teamwork:sentinel (Root Supervisor)"]
     Sentinel --> Orch["teamwork:orchestrator (Dispatch Coordinator)"]
 
-    subgraph Phase1["Phase 1: Dual-Track Execution"]
+    subgraph Phase1["Phase 1: Dual-Track Execution (Fusion VMs)"]
         Orch --> TrackA["Track A: teamwork:test-writer (4-Tier E2E Tests)"]
         Orch --> TrackB["Track B: teamwork:worker (Exclusive Milestone Boundaries)"]
     end
 
-    subgraph Phase2["Phase 2: Adversarial & Forensic Verification Gate"]
-        TrackB --> Reviewer["teamwork:reviewer (Code & Contract Critic)"]
-        TrackB --> Challenger["teamwork:challenger (Boundary Stress Tester)"]
-        TrackA & TrackB --> Auditor["teamwork:forensic-auditor (Binary Anti-Cheat Integrity Veto)"]
+    subgraph Phase2["Phase 2: Two-Stage Verification Gate (Frontier VMs)"]
+        TrackB --> Stage2A["Stage 2A: Parallel Reviewer + Challenger"]
+        Stage2A -- "REQUEST_CHANGES" --> ShortCircuit["⚡ Early Rejection Short-Circuit"]
+        Stage2A -- "All APPROVE" --> Stage2B["Stage 2B: Binary Forensic Auditor (Anti-Mock)"]
     end
 
-    subgraph Phase3["Phase 3: Autonomous Self-Evolution Loop (Harness² + SkillOpt)"]
-        Auditor -- "Gate FAIL (Obsolete/Defective Skill)" --> DefectDetector["Trajectory Failure Detector"]
-        DefectDetector --> Harness["Google Research Harness² (harness-probe.py)"]
-        Harness -- "Propose-Probe-Compose" --> Contrast["Behavioral Contrast Pair (Failed vs Remedied)"]
-        Contrast --> SkillOpt["Microsoft Research SkillOpt (skillopt-engine.py)"]
-        SkillOpt -- "Bounded Text Diff" --> ValGate["Validation Gate (gate_no_regression: true)"]
-        ValGate -- "PASS" --> Adopt["Atomic Skill Adoption (SKILL.md + backup)"]
-        Adopt -. "Re-dispatch with Refined Skill" .-> TrackB
-    end
+    Stage2B -- "🟢 CLEAN" --> Victory["Phase 4: teamwork:victory-auditor (Final Gate)"]
 
-    Auditor -- "🟢 CLEAN + All APPROVE" --> Victory["teamwork:victory-auditor (Final Delivery Gate)"]
+    subgraph Phase3["Phase 3: Smart Remediation & Dynamic Router (E ou OU)"]
+        ShortCircuit --> Router["teamwork:remediation-router (Lite VM)"]
+        Stage2B -- "🔴 INTEGRITY_VIOLATION" --> Router
+
+        Router -- "Bug de lógica / Teste falho" --> PathCode["1. [OU] CODE_ONLY: Worker focado direto (0 overhead)"]
+        Router -- "Comando de terminal / flag" --> PathHarness["2. [OU] HARNESS²: Propose-Probe contrast (harness-probe.py)"]
+        Router -- "Instrução no SKILL.md errada" --> PathSkillOpt["3. [OU] SKILLOPT: Bounded Diff + Gate (skillopt-engine.py)"]
+        Router -- "Comando falhou por culpa da skill" --> PathBoth["4. [E] HARNESS² + SKILLOPT: Contraste comportamental E Bounded Diff"]
+
+        PathHarness --> ValGate["Validation Gate (gate_no_regression: true)"]
+        PathSkillOpt --> ValGate
+        PathBoth --> ValGate
+        ValGate -- "PASS" --> Adopt["Adoção Atômica da Skill"]
+
+        PathCode -.-> TrackB
+        Adopt -.-> TrackB
+    end
 ```
 
 ---
