@@ -2,7 +2,7 @@
 """
 Comprehensive Local Test Suite for Teamwork + Harness² + SkillOpt Integration.
 Runs static verification, schema validation, bounded diff gate testing,
-anti-regression enforcement, and multi-agent contract checks.
+anti-regression enforcement, multi-agent contract checks, and Devin Cloud environment healing.
 """
 
 import unittest
@@ -18,6 +18,7 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 import importlib
 skillopt_engine = importlib.import_module("skillopt-engine")
 harness_probe = importlib.import_module("harness-probe")
+env_healer = importlib.import_module("devin-env-healer")
 
 
 class TestSkillOptEngine(unittest.TestCase):
@@ -119,6 +120,37 @@ class TestHarnessContrastiveProbe(unittest.TestCase):
         target, rep = self.proposer.compose_skill_patch(skill_text, contrast)
         self.assertEqual(target, "`npm test --legacy-peer-deps`")
         self.assertEqual(rep, "`pnpm test`")
+
+
+class TestDevinEnvironmentHealer(unittest.TestCase):
+    """Tests detection of slow blueprints, startup latency, and environment secrets."""
+
+    def setUp(self):
+        self.diagnoser = env_healer.DevinEnvironmentDiagnoser(Path("."))
+
+    def test_detect_slow_startup_logs(self):
+        log_sample = (
+            "Starting Devin Cloud VM...\n"
+            "Step 'npm install' took: 110s\n"
+            "Step 'build' took: 15s\n"
+        )
+        diagnostics = self.diagnoser.analyze_startup_logs(log_sample)
+        self.assertEqual(len(diagnostics), 1)
+        self.assertEqual(diagnostics[0].issue_type, "STARTUP_LATENCY")
+        self.assertIn("110.0s", diagnostics[0].details)
+
+    def test_detect_uncached_blueprint_installs(self):
+        with tempfile.NamedTemporaryFile("w+", suffix=".yaml", delete=False) as f:
+            f.write("maintenance:\n  run: npm install\n")
+            f_path = Path(f.name)
+        try:
+            diags = self.diagnoser.inspect_blueprint(f_path)
+            self.assertEqual(len(diags), 1)
+            self.assertEqual(diags[0].issue_type, "SLOW_DEPENDENCY")
+            self.assertEqual(diags[0].bounded_target, "npm install")
+            self.assertEqual(diags[0].bounded_replacement, "npm ci")
+        finally:
+            f_path.unlink()
 
 
 class TestWorkspaceStructure(unittest.TestCase):
