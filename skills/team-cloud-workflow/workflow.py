@@ -131,6 +131,17 @@ WORKER_HANDOFF_SCHEMA = {
     "required": ["milestone_id", "observation", "logic_chain", "conclusion", "verification_method", "files_modified", "tests_passed"],
 }
 
+REMEDIATION_ROUTER_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "engine": {"type": "string", "enum": ["CODE_ONLY", "HARNESS", "SKILLOPT", "HARNESS_PLUS_SKILLOPT"]},
+        "reasoning": {"type": "string"},
+        "target_file": {"type": "string"},
+    },
+    "required": ["engine", "reasoning"],
+}
+
+
 GATE_VERDICT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -218,6 +229,30 @@ async def run_test_writer():
         schema=WORKER_HANDOFF_SCHEMA,
         label="test-writer-track-a",
         model=cfg["model"],
+    )
+
+
+async def route_remediation_strategy(defects):
+    """
+    Fast Triage Agent (Lite model): Decides instantaneously whether defects require:
+    - CODE_ONLY: Normal implementation bug fix (Worker only)
+    - HARNESS: Behavioral command contrast / execution discrepancy (harness-probe.py)
+    - SKILLOPT: Flawed / obsolete instruction text in SKILL.md (skillopt-engine.py)
+    - HARNESS_PLUS_SKILLOPT: Complex tool/environment breakdown requiring both
+    """
+    defects_str = json.dumps(defects, sort_keys=True)
+    return await agent(
+        "You are Remediation Router `teamwork:remediation-router`.\n"
+        "Analyze the reported defects and choose the exact minimal remediation engine:\n"
+        f"Defects:\n{defects_str}\n\n"
+        "- CODE_ONLY: Pure logic bug, missing implementation, or failing unit test in production code.\n"
+        "- HARNESS: Terminal command failed with exit code, command not found, or API syntax discrepancy.\n"
+        "- SKILLOPT: Instruction in a SKILL.md is obsolete, malformed, or recommending bad patterns.\n"
+        "- HARNESS_PLUS_SKILLOPT: Command failed due to obsolete instruction in SKILL.md requiring behavioral probe then diff.\n",
+        phase="remediation",
+        schema=REMEDIATION_ROUTER_SCHEMA,
+        label="remediation-router",
+        model=SUBAGENT_MODEL_TIERS["explorer"]["model"],  # Fast Lite model
     )
 
 
@@ -395,19 +430,25 @@ async def execute_full_workflow():
             await run_skill_optimizer(all_defects)
         seen_defect_signatures.add(defect_sig)
 
-        log(f"Gate Iteration {iteration} FAILED with {len(all_defects)} defects. Launching remediation worker.")
+        log(f"Gate Iteration {iteration} FAILED with {len(all_defects)} defects. Routing optimal remediation...")
         
-        # Check if defects stem from tools or skills
-        if any("skill" in str(d).lower() or "command" in str(d).lower() or "not found" in str(d).lower() for d in all_defects):
+        # Fast Decision Agent (Lite VM) instantly selects the minimal path
+        route = await route_remediation_strategy(all_defects)
+        engine_choice = route.get("engine", "CODE_ONLY")
+        log(f"[REMEDIATION ROUTER] Strategy chosen: {engine_choice} | Reasoning: {route.get('reasoning')}")
+
+        if engine_choice in ("HARNESS", "SKILLOPT", "HARNESS_PLUS_SKILLOPT"):
+            log(f"Executing focused self-evolution ({engine_choice}) before code remediation...")
             await run_skill_optimizer(all_defects)
 
+        # Targeted Worker runs focused only on what needs fixing
         defects_json = json.dumps(all_defects, sort_keys=True)
         rem_cfg = SUBAGENT_MODEL_TIERS["remediation"]
         await agent(
             f"You are Teamwork Remediation Worker `worker_remediation_{iteration}`.\n"
-            "Log failed approaches in `.agents/teamwork/orchestrator_1/DEAD_ENDS.md`, update `GATE_STATUS.md`, "
-            f"and fix every defect below with genuine production/test code:\n{defects_json}\n"
-            "Run the full E2E test suite and verify 100% pass rate with 0 compilation errors.",
+            f"Strategy: {engine_choice}\n"
+            f"Defects to resolve:\n{defects_json}\n"
+            "Apply targeted, minimal fixes without touching unaffected code. Verify 0 compilation errors.",
             phase="remediation",
             schema=WORKER_HANDOFF_SCHEMA,
             label=f"worker-remediation-{iteration}",
