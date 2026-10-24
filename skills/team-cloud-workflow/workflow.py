@@ -261,9 +261,13 @@ async def run_skill_optimizer(defects):
     return await agent(
         "You are Teamwork Skill Optimizer `teamwork:skill-optimizer`.\n"
         "A Gate verification failure or command error was detected:\n" + json.dumps(defects, sort_keys=True) + "\n"
-        "1. Run `python scripts/harness-probe.py` to extract behavioral contrast (failed vs working command).\n"
-        "2. Run `python scripts/skillopt-engine.py propose` with bounded diffs and check validation gate.\n"
-        "3. Run `python scripts/skillopt-engine.py adopt` to atomically update the defective skill in `skills/`.\n"
+        "Execute the complete Self-Healing Protocol (Harness² + SkillOpt):\n"
+        "1. Trajectory Divergence (t*): Run scripts/harness-probe.py to isolate divergence step.\n"
+        "2. Interactive Sandbox Probe: Empirically test candidate actions in sandbox before proposing.\n"
+        "3. Negative Rejection Memory: Check scripts/experience-memory.py to avoid repeating failed diffs.\n"
+        "4. Bounded Diff Gate: Run scripts/skillopt-engine.py propose with validation gate.\n"
+        "5. Human Approval Gate: The PreToolUse hook intercepts adoption to request user approval.\n"
+        "6. Slow Meta-Update: Consolidate accumulated deprecation tags to prevent token bloat.\n"
         "Write 5-Component handoff report in `.agents/teamwork/skill_optimizer/handoff.md`.",
         phase="self_evolution",
         schema=WORKER_HANDOFF_SCHEMA,
