@@ -199,6 +199,20 @@ async def run_test_writer():
     )
 
 
+async def run_skill_optimizer(defects):
+    return await agent(
+        "You are Teamwork Skill Optimizer `teamwork:skill-optimizer`.\n"
+        "A Gate verification failure or command error was detected:\n" + json.dumps(defects, sort_keys=True) + "\n"
+        "1. Run `python scripts/harness-probe.py` to extract behavioral contrast (failed vs working command).\n"
+        "2. Run `python scripts/skillopt-engine.py propose` with bounded diffs and check validation gate.\n"
+        "3. Run `python scripts/skillopt-engine.py adopt` to atomically update the defective skill in `skills/`.\n"
+        "Write 5-Component handoff report in `.agents/teamwork/skill_optimizer/handoff.md`.",
+        phase="self_evolution",
+        schema=WORKER_HANDOFF_SCHEMA,
+        label="skill-optimizer",
+    )
+
+
 async def run_milestone_worker(milestone):
     m_id = milestone["id"]
     m_scope = milestone["scope"]
@@ -312,6 +326,8 @@ async def execute_full_workflow():
             break
 
         log(f"Gate Iteration {iteration} FAILED with {len(all_defects)} defects. Launching remediation worker.")
+        if any("skill" in str(d).lower() or "command" in str(d).lower() for d in all_defects):
+            await run_skill_optimizer(all_defects)
         defects_json = json.dumps(all_defects, sort_keys=True)
         await agent(
             f"You are Teamwork Remediation Worker `worker_remediation_{iteration}`.\n"
