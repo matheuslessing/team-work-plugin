@@ -1,0 +1,8 @@
+{
+  "name": "teamwork-skillopt-harness",
+  "description": "Unified autonomous multi-agent engineering system with recursive harnessing (Harness²) and self-evolving text-space skills (SkillOpt) behind a strict validation gate.",
+  "version": "1.0.0",
+  "author": "Matheus Lessing",
+  "keywords": ["multi-agent", "teamwork", "harness2", "skillopt", "self-evolution", "gate-validation"],
+  "license": "MIT"
+}

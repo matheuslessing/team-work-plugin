@@ -1,132 +1,129 @@
-# Teamwork Plugin for Devin CLI
+# Teamwork + Harness² + SkillOpt: Autonomous Multi-Agent Engineering & Self-Evolution System
 
-Autonomous multi-agent engineering system for **Devin CLI** featuring interactive 9-step prompt crafting, hierarchical multi-agent orchestration (`Sentinel -> Orchestrator -> Explorers, Test Writer, Milestone Workers`), Dual-Track 4-tier E2E testing, adversarial stress challengers, and binary forensic integrity auditing.
+[![Tests](https://img.shields.io/badge/tests-11%20passed-brightgreen.svg)]()
+[![Forensic Audit](https://img.shields.io/badge/forensic%20integrity-CLEAN-success.svg)]()
+[![Validation Gate](https://img.shields.io/badge/validation%20gate-no--regression-blue.svg)]()
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+An enterprise-grade multi-agent engineering plugin for **Devin CLI, Devin Cloud, Claude Code, and Antigravity 2.0**.
+It fuses:
+1. **Hierarchical Multi-Agent Orchestration & Adversarial Verification Gate** ([Teamwork Plugin](https://github.com/matheuslessing/team-work-plugin)).
+2. **Behavioral Contrast & Recursive Harnessing** ([Google Research Harness²](https://github.com/google-research/harness2)).
+3. **Text-Space Skill Optimization & Validation-Gated Anti-Regression** ([Microsoft Research SkillOpt](https://microsoft.github.io/SkillOpt/)).
 
 ---
 
-## Architecture Overview
+## 🏛️ Architecture Overview
 
 ```mermaid
 flowchart TD
-    User["User Request"] --> Craft["/team-craft (9-Step Prompt Crafting)"]
-    Craft --> Sentinel["teamwork:sentinel (Root Supervisor)"]
-    Sentinel --> Orch["teamwork:orchestrator (Dispatch-Only Orchestrator)"]
-
-    subgraph Phase0["Phase 0: Codebase Survey"]
-        Orch --> Exp1["teamwork:explorer 1"]
-        Orch --> Exp2["teamwork:explorer 2"]
-        Orch --> Exp3["teamwork:explorer 3"]
-        Exp1 & Exp2 & Exp3 --> ProjectDoc["PROJECT.md (Contracts & Feature Inventory)"]
-    end
+    User["User Prompt / Feature Request"] --> Sentinel["teamwork:sentinel (Root Supervisor)"]
+    Sentinel --> Orch["teamwork:orchestrator (Dispatch Coordinator)"]
 
     subgraph Phase1["Phase 1: Dual-Track Execution"]
-        ProjectDoc --> TestWriter["Track A: teamwork:test-writer (4-Tier E2E Tests)"]
-        ProjectDoc --> Workers["Track B: teamwork:worker (M1..Mn with Strict Write Boundaries)"]
+        Orch --> TrackA["Track A: teamwork:test-writer (4-Tier E2E Tests)"]
+        Orch --> TrackB["Track B: teamwork:worker (Exclusive Milestone Boundaries)"]
     end
 
-    subgraph Phase2["Phase 2: Adversarial & Forensic Gate"]
-        Workers --> Reviewer["teamwork:reviewer (Requirements & Code Critic)"]
-        Workers --> Challenger["teamwork:challenger (Empirical Stress & Boundary Tester)"]
-        TestWriter & Workers --> Auditor["teamwork:forensic-auditor (Binary Anti-Cheat Veto)"]
+    subgraph Phase2["Phase 2: Adversarial & Forensic Verification Gate"]
+        TrackB --> Reviewer["teamwork:reviewer (Code & Contract Critic)"]
+        TrackB --> Challenger["teamwork:challenger (Boundary Stress Tester)"]
+        TrackA & TrackB --> Auditor["teamwork:forensic-auditor (Binary Anti-Cheat Integrity Veto)"]
     end
 
-    Auditor -- "🔴 INTEGRITY VIOLATION / REQUEST_CHANGES" --> Remediate["Remediation Loop (DEAD_ENDS.md -> worker_remediation)"]
-    Remediate --> Auditor
-    Auditor -- "🟢 CLEAN + All APPROVE" --> Victory["teamwork:victory-auditor (Final Sentinel Gate)"]
+    subgraph Phase3["Phase 3: Autonomous Self-Evolution Loop (Harness² + SkillOpt)"]
+        Auditor -- "Gate FAIL (Obsolete/Defective Skill)" --> DefectDetector["Trajectory Failure Detector"]
+        DefectDetector --> Harness["Google Research Harness² (harness-probe.py)"]
+        Harness -- "Propose-Probe-Compose" --> Contrast["Behavioral Contrast Pair (Failed vs Remedied)"]
+        Contrast --> SkillOpt["Microsoft Research SkillOpt (skillopt-engine.py)"]
+        SkillOpt -- "Bounded Text Diff" --> ValGate["Validation Gate (gate_no_regression: true)"]
+        ValGate -- "PASS" --> Adopt["Atomic Skill Adoption (SKILL.md + backup)"]
+        Adopt -. "Re-dispatch with Refined Skill" .-> TrackB
+    end
+
+    Auditor -- "🟢 CLEAN + All APPROVE" --> Victory["teamwork:victory-auditor (Final Delivery Gate)"]
 ```
 
 ---
 
-## Installation in Devin CLI & Devin Cloud
+## 🚀 Key Features
 
-### Install Directly from GitHub
+* **Dual-Track Isolation**: Implementers never edit tests to make them pass; QA test writers never edit production logic.
+* **Strict Role Separation**: Orchestrators are dispatch-only. Explorers, Reviewers, Challengers, and Forensic Auditors have write tools disabled in their profiles.
+* **Continuous Self-Evolution**: When a skill instruction causes execution errors or fails the Gate, **Harness²** extracts the contrastive lesson and **SkillOpt** generates a surgical bounded diff tested against a strict validation gate.
+* **Binary Anti-Cheat Gate**: The Forensic Auditor enforces a zero-tolerance policy against fake tests, local mock bypasses, or tautological assertions.
+* **Unified Cross-Platform Compatibility**: Manifested as `plugin.json` for Antigravity 2.0 / CLI, while fully supporting Devin CLI, Devin Cloud, and Claude Code.
+
+---
+
+## 🛠️ CLI Utilities & Proof of Concept
+
+### 1. Run the Self-Evolution POC
+Simulate the full end-to-end loop (Skill defect -> Runtime failure -> Harness² contrast -> SkillOpt bounded diff -> Validation Gate PASS -> Atomic adoption):
+
 ```bash
-devin plugins install matheuslessing/team-work-plugin
+python scripts/demo-poc.py
 ```
-*(Plugins installed from GitHub or added on the Devin Web Customize page automatically sync your `skills/`, `rules/`, `AGENTS.md`, and `hooks.json` across both Devin CLI and Devin Cloud).*
 
-### Install from a Local Clone (Live Editing)
+### 2. Run the Test Suite
+Run unit, schema, and gate tests:
+
 ```bash
-git clone https://github.com/matheuslessing/team-work-plugin.git
-devin plugins install --local ./team-work-plugin
+python -m unittest tests/test_integration.py -v
 ```
 
-### Verify Installation
+### 3. Validate Any Skill Against the Gate
 ```bash
-devin plugins list
-devin plugins info teamwork
+python scripts/skillopt-engine.py validate --skill skills/team-run/SKILL.md
+```
+
+### 4. Propose & Adopt Bounded Diffs
+```bash
+# Preview bounded diff with gate check
+python scripts/skillopt-engine.py propose \
+  --skill skills/sample/SKILL.md \
+  --target "old command" \
+  --replacement "new command"
+
+# Adopt onto disk with automatic backup (.bak)
+python scripts/skillopt-engine.py adopt \
+  --skill skills/sample/SKILL.md \
+  --target "old command" \
+  --replacement "new command"
 ```
 
 ---
 
-## Slash Commands (`skills/team-*`)
+## 📋 Slash Commands
 
-All skills are prefixed with `team-` so they group cleanly in the `/` autocomplete menu with descriptive tags:
+| Command | Category | Description |
+| :--- | :--- | :--- |
+| `/team-craft` | Prompting | Interactive 9-step prompt engineering interview with automatic delegation. |
+| `/team-run` | Pipeline | Full Dual-Track autonomous execution (`Sentinel -> Orchestrator -> Survey -> Dual-Track -> Gate -> Victory`). |
+| `/team-quick` | Agile | Focused 1-Worker + Adversarial Gate verification loop. |
+| `/team-gate` | Gate | 3-Agent verification gate (`reviewer` + `challenger` + `forensic-auditor`). |
+| `/team-audit` | Gate | Zero-tolerance Binary Forensic Integrity Audit (`🟢 CLEAN` vs `🔴 INTEGRITY VIOLATION`). |
+| `/skill-evolve` | Self-Evolution | Autonomous skill refinement via Harness² contrast extraction and SkillOpt bounded edits. |
+| `/team-status` | Dashboard | Real-time mission and milestone status dashboard. |
 
-| Command | Description |
+---
+
+## 👥 Subagent Profiles
+
+| Profile | Capability & Boundary |
 | :--- | :--- |
-| `/team-craft` | **`[Teamwork Prompt Crafting]`** Interactive 9-step prompt engineering interview (`prompt_draft.md` $\to$ `ORIGINAL_REQUEST.md`) with automatic delegation. |
-| `/team-run` | **`[Teamwork Full Autonomous Pipeline]`** Launch the full Dual-Track multi-agent pipeline (`Sentinel -> Orchestrator -> Survey -> Dual-Track -> Gate -> Victory Audit`). |
-| `/team-quick` | **`[Teamwork Quick Focused Team]`** Run a compact team (`1 Worker + Adversarial Reviewer & Forensic Auditor loop`) for self-contained bug fixes or features. |
-| `/team-survey` | **`[Teamwork Phase 0 Survey]`** Dispatch parallel read-only `teamwork:explorer` subagents to map architecture and generate `PROJECT.md`. |
-| `/team-test-track` | **`[Teamwork Track A QA]`** Launch `teamwork:test-writer` to build a 4-tier E2E test suite, CLI test runner, `TEST_INFRA.md`, and `TEST_READY.md`. |
-| `/team-gate` | **`[Teamwork Verification Gate]`** Execute the full 3-agent Gate (`reviewer` + `challenger` + `forensic-auditor`) and record verdicts in `GATE_STATUS.md`. |
-| `/team-audit` | **`[Teamwork Forensic Audit]`** Run a zero-tolerance Binary Forensic Integrity Audit (`🟢 CLEAN` vs `🔴 INTEGRITY VIOLATION`) to catch mock tests, tautologies, and facades. |
-| `/team-status` | **`[Teamwork Mission Dashboard]`** Show live status of `.agents/teamwork/`, including active subagents, milestone progress, and Gate verdicts. |
-| `/team-cloud-workflow` | **`[Teamwork Devin Cloud 100%]`** Run the deterministic Devin Dynamic Workflow (`workflow.py`) or Managed Devins in Devin Cloud with parallel VMs, reactive P2P wakeup, and cron schedules. |
+| `teamwork:sentinel` | Root supervisor managing original requirements and Victory Audit trigger. |
+| `teamwork:orchestrator` | Dispatch coordinator. Never edits production code. |
+| `teamwork:test-writer` | Track A QA engineer authoring 4-tier E2E tests and CLI runners. |
+| `teamwork:worker` | Track B milestone engineer implementing features within exclusive write boundaries. |
+| `teamwork:reviewer` | Adversarial code and requirements reviewer (`APPROVE` vs `REQUEST_CHANGES`). |
+| `teamwork:challenger` | Boundary and stress condition hunter. |
+| `teamwork:forensic-auditor` | Binary anti-cheat auditor. Holds absolute veto power. |
+| `teamwork:skill-optimizer` | Self-healer running text-space bounded diffs and validation gates on skills. |
+| `teamwork:victory-auditor` | Final independent pre-delivery auditor spawned by Sentinel. |
 
 ---
 
-## Custom Subagent Profiles (`agents/`)
+## 📄 License
 
-| Profile | Role & Capabilities | Nesting | Write Scope |
-| :--- | :--- | :---: | :--- |
-| `teamwork:sentinel` | Root supervisor; manages `ORIGINAL_REQUEST.md` and enforces the mandatory Victory Audit. | `max-nesting: 3` | `.agents/teamwork/sentinel/` |
-| `teamwork:orchestrator` | Dispatch-only coordinator; authors `PROJECT.md`, `GATE_STATUS.md`, `DEAD_ENDS.md`. Never edits production code. | `max-nesting: 2` | `.agents/teamwork/orchestrator_1/` |
-| `teamwork:explorer` | Read-only codebase surveyor and root-cause investigator. | Leaf | `.agents/teamwork/<explorer_id>/` |
-| `teamwork:test-writer` | Track A QA engineer; builds 4-tier opaque-box E2E tests and CLI test runners. | Leaf | `Tests/`, `TEST_INFRA.md`, `TEST_READY.md` |
-| `teamwork:worker` | Track B Milestone engineer; implements features within exclusive file write boundaries. | Leaf | Owned milestone files in `BRIEFING.md` |
-| `teamwork:reviewer` | Adversarial code and requirements critic (`APPROVE` vs `REQUEST_CHANGES`). | Leaf | `.agents/teamwork/<reviewer_id>/` |
-| `teamwork:challenger` | Empirical stress and boundary tester (`APPROVE` vs `REQUEST_CHANGES`). | Leaf | `.agents/teamwork/<challenger_id>/` |
-| `teamwork:forensic-auditor` | Binary integrity auditor (`🟢 CLEAN` vs `🔴 INTEGRITY VIOLATION`). Hunts for fake tests, mocks, and facades. | Leaf | `.agents/teamwork/<auditor_id>/` |
-| `teamwork:victory-auditor` | Final independent pre-delivery auditor spawned by Sentinel before reporting completion. | Leaf | `.agents/teamwork/victory_auditor/` |
-
----
-
-## Automatic Runtime Detection & 30-Minute Orchestrator VM Watchdog (`watch_dog`)
-
-You never have to remind Devin Cloud that it can use `workflow.py` or Managed Devins, and the primary Orchestrator VM is protected against 30-minute inactivity drops:
-1. **30-Minute Orchestrator VM Watchdog (`watch_dog`)**:
-   - In **Devin Cloud**, when the primary Orchestrator VM waits for parallel child sessions (`devin_session_gather` or long-running VMs), it can be suspended if idle for 30 minutes.
-   - To prevent this, Teamwork automatically starts a **3-layer `watch_dog`** configured for a **30-minute protection window** (pulsing every **10 minutes** — 3x per 30-minute window):
-     - **Layer A (OS/VM Background Daemon)**: `teamwork-cli.mjs init`, `detect-env`, and `hooks.json` (`UserPromptSubmit`) automatically spawn a detached background daemon (`node scripts/teamwork-cli.mjs watchdog start --window-min 30 --interval-min 10`) that writes heartbeats to `.agents/teamwork/watchdog.log` and `.agents/teamwork/orchestrator_1/progress.md` and executes lightweight git/OS checks so the hypervisor sees continuous activity. Automatically stops when `sentinel/handoff.md` + `Gate Result: PASS` complete.
-     - **Layer B (`workflow.py` Async Task)**: `orchestrator_vm_watchdog()` runs concurrently inside `.agents/teamwork/workflow.py` (`WATCHDOG_WINDOW_MINUTES = 30`, `WATCHDOG_PULSE_SECONDS = 600`) across all `parallel()` and `agent()` calls.
-     - **Layer C (Session Cron Schedule)**: `devin_schedule_manage` (`*/20 * * * *`) wakes the parent Orchestrator session inside the 30-minute window while awaiting child sessions.
-2. **`UserPromptSubmit` Hook (`hooks.json`)**: On every prompt, detects `DEVIN_CLOUD` vs `DEVIN_CLI_LOCAL`, ensures the 30-minute `watch_dog` is running in Cloud, and injects the active runtime directive directly into the model's context.
-3. **Always-On Rule (`rules/runtime-detection.md`)**: Loaded into the system prompt of every session, instructing Devin Cloud to prioritize `.agents/teamwork/workflow.py` (`--mode full|quick|survey|gate`) and automatically fall back to **Managed Devins** (`devin_session_create` + `devin_session_gather` + `devin_schedule_manage`).
-4. **CLI Detector & Watchdog Controller (`scripts/teamwork-cli.mjs`)**: Supports automatic detection, manual pinning (`--env cloud|local`), and direct `watchdog` control, displaying active status in `/team-status`.
-
----
-
-## Lifecycle Hooks & CLI Utility
-
-- **`UserPromptSubmit` Hook (`hooks.json`)**: Automatically detects `DEVIN_CLOUD` vs `DEVIN_CLI_LOCAL`, auto-starts the 30-minute `watch_dog` daemon in Cloud, and injects orchestration instructions.
-- **`PostCompaction` Hook (`hooks.json`)**: Automatically re-injects `RUNTIME_ENV.md`, `ORIGINAL_REQUEST.md`, `BRIEFING.md`, `PROJECT.md`, and `GATE_STATUS.md` into the agent's context whenever context compaction occurs.
-- **`Stop` Hook (`hooks.json`)**: Warns if an orchestrator attempts to stop while `GATE_STATUS.md` still reports `FAIL` on an in-progress mission.
-- **`scripts/teamwork-cli.mjs`**: Zero-dependency Node.js helper for runtime auto-detection, 30-minute `watch_dog` daemon management, `.agents/teamwork/workflow.py` provisioning, workspace initialization, isolated git worktree creation, 5-Component `handoff.md` validation, static forensic integrity scanning, and status reporting:
-  ```bash
-  node scripts/teamwork-cli.mjs detect-env [--env cloud|local]
-  node scripts/teamwork-cli.mjs init [--env cloud|local]
-  node scripts/teamwork-cli.mjs watchdog <start|stop|status|pulse> [--window-min 30] [--interval-min 10]
-  node scripts/teamwork-cli.mjs spawn worker_m1 implementer --milestone M1 --worktree
-  node scripts/teamwork-cli.mjs validate-handoff .agents/teamwork/worker_m1/handoff.md
-  node scripts/teamwork-cli.mjs scan-integrity
-  node scripts/teamwork-cli.mjs check-gate
-  node scripts/teamwork-cli.mjs status
-  ```
-
----
-
-## License
-
-MIT
+MIT © Matheus Lessing

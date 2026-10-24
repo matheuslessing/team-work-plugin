@@ -81,6 +81,7 @@ Every subagent (`explorer`, `test-writer`, `worker`, `reviewer`, `challenger`, `
 - `teamwork:reviewer` — Adversarial code and requirements reviewer (`allowed-tools: [read, grep, glob, exec]`).
 - `teamwork:challenger` — Empirical stress tester and boundary/edge-case hunter (`allowed-tools: [read, grep, glob, exec]`).
 - `teamwork:forensic-auditor` — Binary integrity auditor (`allowed-tools: [read, grep, glob, exec]`) hunting for tautological tests, mock bypasses, and facades.
+- `teamwork:skill-optimizer` — Text-space skill optimizer & self-healer (`allowed-tools: [read, grep, glob, exec, edit, write]` on `skills/`). Operates bounded diffs and validation gates when skills are defective or obsolete.
 - `teamwork:victory-auditor` — Final independent pre-delivery auditor spawned by Sentinel before reporting completion to the user.
 
 ---

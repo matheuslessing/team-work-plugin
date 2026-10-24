@@ -1,5 +1,8 @@
 node_modules/
+.venv/
+__pycache__/
+*.pyc
+*.bak
 .DS_Store
 Thumbs.db
 .agents/teamwork/
-*.log
