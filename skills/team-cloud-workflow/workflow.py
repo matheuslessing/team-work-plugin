@@ -1,10 +1,13 @@
 """
-Teamwork Deterministic Dynamic Workflows for Devin Cloud
-Includes built-in 30-Minute Orchestrator VM Watchdog (`watch_dog`) to prevent the primary
-Orchestrator VM from dropping due to idle timeouts while waiting for parallel child sessions.
+Teamwork Deterministic Dynamic Workflows for Devin Cloud (v2 Optimized)
+Includes:
+- Tier-Aware VM Sizing (Lite, Fusion, Frontier) based on agent responsibility
+- Smart Gate Short-Circuiting to eliminate Phase 2 repetitive loops
+- Built-in 30-Minute Orchestrator VM Watchdog (`watch_dog`)
+- Autonomous SkillOpt & Harness² Self-Evolution for broken skills/blueprints
 
 Supports 4 workflow modes via `--mode <full|quick|survey|gate>` or `TEAMWORK_WORKFLOW_MODE`:
-  - `full`   (/team-run, /team-craft): Phase 0 Survey -> Phase 1 Dual-Track -> Phase 2 Gate -> Phase 3 Remediation -> Phase 4 Victory Audit
+  - `full`   (/team-run, /team-craft): Phase 0 Survey -> Phase 1 Dual-Track -> Phase 2 Smart Gate -> Phase 3 Remediation -> Phase 4 Victory Audit
   - `quick`  (/team-quick): 1 Worker -> Parallel Adversarial Reviewer + Binary Forensic Auditor loop
   - `survey` (/team-survey): Parallel Read-Only Explorers -> PROJECT.md synthesis
   - `gate`   (/team-gate, /team-audit): Parallel Adversarial Reviewer + Empirical Challenger + Binary Forensic Auditor -> GATE_STATUS.md
@@ -21,39 +24,60 @@ import sys
 WATCHDOG_WINDOW_MINUTES = 30
 WATCHDOG_PULSE_SECONDS = 600  # Pulses every 10 min (3x per 30-min idle window)
 
+# Tier-Aware Subagent Model Routing for Devin Cloud
+SUBAGENT_MODEL_TIERS = {
+    # Lightweight, fast exploration & syntax checks (Lite / low compute)
+    "explorer": {"model": "lite", "effort": "low"},
+    
+    # Execution & code writing: Fusion mode (Frontier lead planner + fast sidekick worker)
+    "worker": {"model": "fusion", "effort": "medium"},
+    "test_writer": {"model": "fusion", "effort": "medium"},
+    "remediation": {"model": "fusion", "effort": "high"},
+    
+    # Critical adversarial & forensic audits: Frontier reasoning
+    "reviewer": {"model": "frontier", "effort": "medium"},
+    "challenger": {"model": "frontier", "effort": "high"},
+    "forensic_auditor": {"model": "frontier", "effort": "high"},
+    "victory_auditor": {"model": "frontier", "effort": "high"},
+    
+    # Text-space skill optimizer & self-healer
+    "skill_optimizer": {"model": "frontier", "effort": "medium"},
+}
+
 WORKFLOW_MODES = {
     "full": {
         "name": "teamwork-full-pipeline",
-        "description": "Autonomous Teamwork Dual-Track pipeline with 30m VM watch_dog, 4-tier E2E testing, adversarial challenge, and binary forensic integrity audit",
+        "description": "Autonomous Teamwork Dual-Track pipeline with Tier-Aware VMs (Lite/Fusion/Frontier), Smart Gate short-circuiting, and Harness2/SkillOpt self-evolution",
         "phases": [
-            {"title": "survey", "detail": "Phase 0: Parallel Explorer survey and PROJECT.md contract synthesis"},
-            {"title": "dual_track", "detail": "Phase 1: Parallel E2E Test Track (Tiers 1-4) and Milestone Workers"},
-            {"title": "gate_verification", "detail": "Phase 2: Adversarial Review, Empirical Challenge, and Forensic Integrity Audit"},
-            {"title": "remediation", "detail": "Phase 3: Automated defect and test-authenticity remediation loop"},
-            {"title": "victory_audit", "detail": "Phase 4: Final independent Sentinel Victory Audit"},
+            {"title": "survey", "detail": "Phase 0: Parallel Lite Explorer survey and PROJECT.md contract synthesis"},
+            {"title": "dual_track", "detail": "Phase 1: Parallel Fusion Dual-Track E2E Test Writer + Milestone Workers"},
+            {"title": "gate_verification", "detail": "Phase 2: Parallel Adversarial Reviewer, Challenger, and Forensic Auditor"},
+            {"title": "self_evolution", "detail": "Phase 2.5: Autonomous Harness2 and SkillOpt self-healing if skills/environment fail"},
+            {"title": "remediation", "detail": "Phase 3: Targeted Remediation Worker loop (if Gate flags defects)"},
+            {"title": "victory_audit", "detail": "Phase 4: Independent Pre-Delivery Victory Audit"},
         ],
     },
     "quick": {
-        "name": "teamwork-quick-pipeline",
-        "description": "Compact Teamwork loop with 30m VM watch_dog: 1 Worker + Parallel Adversarial Reviewer & Binary Forensic Auditor",
+        "name": "teamwork-quick-team",
+        "description": "Fast 1-Worker + Parallel Reviewer/Forensic Auditor verification",
         "phases": [
-            {"title": "implementation", "detail": "Step 1: Focused Worker implementation with genuine tests"},
-            {"title": "gate_verification", "detail": "Step 2: Parallel Adversarial Reviewer and Binary Forensic Auditor"},
-            {"title": "remediation", "detail": "Step 3: Automated remediation loop until APPROVE + CLEAN"},
+            {"title": "implementation", "detail": "Fusion Worker implementation"},
+            {"title": "gate_verification", "detail": "Parallel Reviewer + Binary Forensic Auditor gate"},
+            {"title": "remediation", "detail": "Remediation loop if needed"},
         ],
     },
     "survey": {
-        "name": "teamwork-survey-pipeline",
-        "description": "Phase 0 Parallel Read-Only Explorer codebase survey and PROJECT.md synthesis",
+        "name": "teamwork-survey-only",
+        "description": "Fast parallel codebase survey with Lite Explorers to synthesize PROJECT.md",
         "phases": [
-            {"title": "survey", "detail": "Parallel Explorer survey and PROJECT.md contract synthesis"},
+            {"title": "survey", "detail": "Parallel Lite Explorers mapping architecture, domain logic, data models"},
         ],
     },
     "gate": {
-        "name": "teamwork-gate-pipeline",
-        "description": "3-Agent Teamwork Verification Gate (Adversarial Reviewer + Empirical Challenger + Binary Forensic Auditor)",
+        "name": "teamwork-verification-gate-only",
+        "description": "Standalone Phase 2 parallel Verification Gate",
         "phases": [
-            {"title": "gate_verification", "detail": "Parallel Adversarial Review, Empirical Challenge, and Forensic Integrity Audit"},
+            {"title": "gate_verification", "detail": "Parallel Reviewer + Challenger + Forensic Auditor verification"},
         ],
     },
 }
@@ -61,18 +85,20 @@ WORKFLOW_MODES = {
 SURVEY_SCHEMA = {
     "type": "object",
     "properties": {
-        "domain": {"type": "string"},
-        "root_causes": {"type": "array", "items": {"type": "string"}},
-        "interface_contracts": {"type": "array", "items": {"type": "string"}},
-        "owned_files": {"type": "array", "items": {"type": "string"}},
+        "lens": {"type": "string"},
+        "summary": {"type": "string"},
+        "entry_points": {"type": "array", "items": {"type": "string"}},
+        "key_files": {"type": "array", "items": {"type": "string"}},
+        "gotchas": {"type": "array", "items": {"type": "string"}},
     },
-    "required": ["domain", "root_causes", "interface_contracts", "owned_files"],
+    "required": ["lens", "summary", "key_files"],
 }
 
 PROJECT_PLAN_SCHEMA = {
     "type": "object",
     "properties": {
-        "project_md_written": {"type": "boolean"},
+        "architecture_summary": {"type": "string"},
+        "feature_inventory": {"type": "array", "items": {"type": "string"}},
         "milestones": {
             "type": "array",
             "items": {
@@ -81,125 +107,122 @@ PROJECT_PLAN_SCHEMA = {
                     "id": {"type": "string"},
                     "scope": {"type": "string"},
                     "owned_files": {"type": "array", "items": {"type": "string"}},
+                    "acceptance_criteria": {"type": "array", "items": {"type": "string"}},
                 },
-                "required": ["id", "scope", "owned_files"],
+                "required": ["id", "scope", "owned_files", "acceptance_criteria"],
             },
         },
     },
-    "required": ["project_md_written", "milestones"],
+    "required": ["architecture_summary", "feature_inventory", "milestones"],
 }
 
 WORKER_HANDOFF_SCHEMA = {
     "type": "object",
     "properties": {
-        "agent_id": {"type": "string"},
-        "handoff_path": {"type": "string"},
-        "compile_errors": {"type": "integer"},
-        "summary": {"type": "string"},
+        "milestone_id": {"type": "string"},
+        "observation": {"type": "string"},
+        "logic_chain": {"type": "string"},
+        "caveats": {"type": "string"},
+        "conclusion": {"type": "string"},
+        "verification_method": {"type": "string"},
+        "files_modified": {"type": "array", "items": {"type": "string"}},
+        "tests_passed": {"type": "boolean"},
     },
-    "required": ["agent_id", "handoff_path", "compile_errors", "summary"],
+    "required": ["milestone_id", "observation", "logic_chain", "conclusion", "verification_method", "files_modified", "tests_passed"],
 }
 
 GATE_VERDICT_SCHEMA = {
     "type": "object",
     "properties": {
-        "agent_id": {"type": "string"},
+        "agent": {"type": "string"},
         "verdict": {"type": "string", "enum": ["APPROVE", "REQUEST_CHANGES", "CLEAN", "INTEGRITY_VIOLATION"]},
+        "summary": {"type": "string"},
         "defects": {"type": "array", "items": {"type": "string"}},
-        "handoff_path": {"type": "string"},
+        "invalidation_conditions": {"type": "array", "items": {"type": "string"}},
     },
-    "required": ["agent_id", "verdict", "defects", "handoff_path"],
+    "required": ["agent", "verdict", "summary", "defects"],
 }
 
 
 def resolve_mode() -> str:
-    if "--mode" in sys.argv:
-        idx = sys.argv.index("--mode")
-        if idx + 1 < len(sys.argv) and sys.argv[idx + 1] in WORKFLOW_MODES:
-            return sys.argv[idx + 1]
-    env_mode = os.environ.get("TEAMWORK_WORKFLOW_MODE", "full").strip().lower()
-    return env_mode if env_mode in WORKFLOW_MODES else "full"
+    for idx, arg in enumerate(sys.argv):
+        if arg == "--mode" and idx + 1 < len(sys.argv):
+            m = sys.argv[idx + 1].lower()
+            if m in WORKFLOW_MODES:
+                return m
+    env_m = os.environ.get("TEAMWORK_WORKFLOW_MODE", "").lower()
+    if env_m in WORKFLOW_MODES:
+        return env_m
+    return "full"
+
+
+def log(msg: str):
+    ts = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    print(f"[{ts}] [teamwork-cloud] {msg}", flush=True)
 
 
 async def orchestrator_vm_watchdog():
-    """
-    Background 30-minute watch_dog loop running inside the primary Orchestrator VM.
-    Emits a disk + process + workflow log heartbeat every 10 minutes (3x per 30m window)
-    so the primary Orchestrator VM never gets suspended for inactivity while awaiting child VMs.
-    """
-    teamwork_dir = os.path.join(os.getcwd(), ".agents", "teamwork")
-    os.makedirs(teamwork_dir, exist_ok=True)
-    watchdog_log = os.path.join(teamwork_dir, "watchdog.log")
-    progress_md = os.path.join(teamwork_dir, "orchestrator_1", "progress.md")
-    pulse_count = 0
-
+    """Keeps Orchestrator VM active during long parallel child session runs."""
+    cycle = 0
     while True:
-        await asyncio.sleep(WATCHDOG_PULSE_SECONDS)
-        pulse_count += 1
-        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
         try:
-            subprocess.run(["git", "status", "--short"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
-        except Exception:
-            pass
-
-        entry = (
-            f"[{now_iso}] [WATCH_DOG {WATCHDOG_WINDOW_MINUTES}m KEEP-ALIVE] "
-            f"Primary Orchestrator VM active (pulse #{pulse_count}, interval={WATCHDOG_PULSE_SECONDS}s)\n"
-        )
-        try:
+            await asyncio.sleep(WATCHDOG_PULSE_SECONDS)
+            cycle += 1
+            log(f"[WATCH_DOG PULSE #{cycle}] Primary Orchestrator VM keep-alive pulse (window: {WATCHDOG_WINDOW_MINUTES}m).")
+            watchdog_log = os.path.join(".agents", "teamwork", "watchdog.log")
+            os.makedirs(os.path.dirname(watchdog_log), exist_ok=True)
             with open(watchdog_log, "a", encoding="utf-8") as f:
-                f.write(entry)
-            if os.path.exists(progress_md):
-                with open(progress_md, "a", encoding="utf-8") as pf:
-                    pf.write(f"- {entry}")
-        except Exception:
-            pass
-
-        if "log" in globals():
-            log(f"[WATCH_DOG 30m KEEP-ALIVE] Orchestrator VM active (pulse #{pulse_count})")
+                f.write(f"[{datetime.datetime.now(datetime.timezone.utc).isoformat()}] pulse #{cycle}\n")
+        except asyncio.CancelledError:
+            log("[WATCH_DOG STOPPED] Primary Orchestrator VM watchdog cleanly terminated.")
+            break
+        except Exception as e:
+            log(f"[WATCH_DOG ERROR] {e}")
 
 
 async def run_survey_explorer(idx: int, focus: str):
+    cfg = SUBAGENT_MODEL_TIERS["explorer"]
     return await agent(
-        f"You are Teamwork Explorer `explorer_survey_{idx}` (strictly READ-ONLY outside `.agents/teamwork/explorer_survey_{idx}/`).\n"
-        f"Read `.agents/teamwork/ORIGINAL_REQUEST.md` and survey the codebase for: {focus}.\n"
-        f"Write `.agents/teamwork/explorer_survey_{idx}/BRIEFING.md`, `analysis.md`, and 5-Component `handoff.md`.\n"
-        "Return exact root causes, proposed interface contracts, and file boundaries.",
+        f"You are Teamwork Codebase Surveyor `explorer_survey_{idx}`.\n"
+        f"Lens: {focus}\n"
+        "Explore the repository using read-only tools. Identify entry points, contracts, and key files.\n"
+        "Write 5-Component `handoff.md` and return structured survey.",
         phase="survey",
         schema=SURVEY_SCHEMA,
         label=f"explorer-survey-{idx}",
+        model=cfg["model"],
     )
 
 
 async def synthesize_project_md(surveys):
-    survey_json = json.dumps(surveys, sort_keys=True)
+    cfg = SUBAGENT_MODEL_TIERS["worker"]
+    surveys_summary = json.dumps(surveys, indent=2, sort_keys=True)
     return await agent(
-        "You are the Teamwork Orchestrator (`orchestrator_1`).\n"
-        "Synthesize the Explorer survey results below and `.agents/teamwork/ORIGINAL_REQUEST.md` into "
-        "`.agents/teamwork/orchestrator_1/PROJECT.md` (Architecture, 100% Feature Inventory, Milestones, "
-        "Interface Contracts, and non-overlapping file write boundaries).\n"
-        f"Survey data:\n{survey_json}",
+        "You are Teamwork Orchestrator synthesizing the Phase 0 Survey into `.agents/teamwork/orchestrator_1/PROJECT.md`.\n"
+        "Define Global Architecture, 100% Feature Inventory, Milestones with non-overlapping write boundaries, and Interface Contracts.\n"
+        f"Surveys:\n{surveys_summary}",
         phase="survey",
         schema=PROJECT_PLAN_SCHEMA,
-        label="synthesize-project-md",
+        label="orchestrator-survey-synthesis",
+        model=cfg["model"],
     )
 
 
 async def run_test_writer():
+    cfg = SUBAGENT_MODEL_TIERS["test_writer"]
     return await agent(
-        "You are Teamwork `test_writer_1` (Track A: E2E Testing Track).\n"
-        "Read `.agents/teamwork/ORIGINAL_REQUEST.md` and `.agents/teamwork/orchestrator_1/PROJECT.md`.\n"
-        "Own exclusively: `TEST_INFRA.md`, `TEST_READY.md`, test suite directory, and test runner scripts.\n"
-        "Implement the 4-Tier E2E test suite (Tier 1 Feature >=5, Tier 2 Boundary >=5, Tier 3 Combinatorial, Tier 4 Scenarios) "
-        "bound directly to real production classes (ZERO local mock tautologies, ZERO facade runners).\n"
-        "Write `.agents/teamwork/test_writer_1/handoff.md` (5-Component format).",
+        "You are Track A QA Engineer `teamwork:test-writer`.\n"
+        "Read `.agents/teamwork/orchestrator_1/PROJECT.md` and build an independent 4-tier E2E test suite.\n"
+        "NEVER touch production implementation files. Write `TEST_INFRA.md` and `TEST_READY.md`.",
         phase="dual_track",
         schema=WORKER_HANDOFF_SCHEMA,
-        label="test-writer-1",
+        label="test-writer-track-a",
+        model=cfg["model"],
     )
 
 
 async def run_skill_optimizer(defects):
+    cfg = SUBAGENT_MODEL_TIERS["skill_optimizer"]
     return await agent(
         "You are Teamwork Skill Optimizer `teamwork:skill-optimizer`.\n"
         "A Gate verification failure or command error was detected:\n" + json.dumps(defects, sort_keys=True) + "\n"
@@ -210,10 +233,12 @@ async def run_skill_optimizer(defects):
         phase="self_evolution",
         schema=WORKER_HANDOFF_SCHEMA,
         label="skill-optimizer",
+        model=cfg["model"],
     )
 
 
 async def run_milestone_worker(milestone):
+    cfg = SUBAGENT_MODEL_TIERS["worker"]
     m_id = milestone["id"]
     m_scope = milestone["scope"]
     m_files = json.dumps(milestone["owned_files"], sort_keys=True)
@@ -221,15 +246,24 @@ async def run_milestone_worker(milestone):
         f"You are Teamwork Milestone Worker `worker_{m_id}`.\n"
         f"Scope: {m_scope}\n"
         f"Own exclusively: {m_files}\n"
-        "Implement genuine production logic adhering strictly to `.agents/teamwork/orchestrator_1/PROJECT.md § Interface Contracts`.\n"
+        "Implement genuine production logic adhering strictly to `.agents/teamwork/orchestrator_1/PROJECT.md — Interface Contracts`.\n"
         "Verify 0 compilation errors and write `.agents/teamwork/worker_" + m_id + "/handoff.md` (5-Component format).",
         phase="dual_track",
         schema=WORKER_HANDOFF_SCHEMA,
         label=f"worker-{m_id}",
+        model=cfg["model"],
     )
 
 
 async def run_gate(iteration: int, include_challenger: bool = True):
+    """
+    Phase 2: Fully parallel verification gate with Frontier models.
+    All 3 gate subagents run concurrently on separate cloud child VMs.
+    """
+    rev_cfg = SUBAGENT_MODEL_TIERS["reviewer"]
+    aud_cfg = SUBAGENT_MODEL_TIERS["forensic_auditor"]
+    cha_cfg = SUBAGENT_MODEL_TIERS["challenger"]
+
     reviewer_call = lambda: agent(
         f"You are Teamwork Adversarial Reviewer `reviewer_{iteration}` (READ-ONLY on project source).\n"
         "Inspect all modified files against `.agents/teamwork/ORIGINAL_REQUEST.md` and `PROJECT.md`.\n"
@@ -237,6 +271,7 @@ async def run_gate(iteration: int, include_challenger: bool = True):
         phase="gate_verification",
         schema=GATE_VERDICT_SCHEMA,
         label=f"reviewer-iter-{iteration}",
+        model=rev_cfg["model"],
     )
     auditor_call = lambda: agent(
         f"You are Teamwork Forensic Integrity Auditor `auditor_{iteration}` (Binary Veto: `CLEAN` vs `INTEGRITY_VIOLATION`).\n"
@@ -246,6 +281,7 @@ async def run_gate(iteration: int, include_challenger: bool = True):
         phase="gate_verification",
         schema=GATE_VERDICT_SCHEMA,
         label=f"forensic-auditor-iter-{iteration}",
+        model=aud_cfg["model"],
     )
     if not include_challenger:
         return await parallel([reviewer_call, auditor_call])
@@ -257,7 +293,9 @@ async def run_gate(iteration: int, include_challenger: bool = True):
         phase="gate_verification",
         schema=GATE_VERDICT_SCHEMA,
         label=f"challenger-iter-{iteration}",
+        model=cha_cfg["model"],
     )
+    # Executed strictly in parallel across child VMs
     return await parallel([reviewer_call, challenger_call, auditor_call])
 
 
@@ -273,6 +311,7 @@ async def execute_survey_workflow():
 
 
 async def execute_quick_workflow():
+    cfg = SUBAGENT_MODEL_TIERS["worker"]
     await agent(
         "You are Teamwork Quick Worker `worker_quick_1`.\n"
         "Read `.agents/teamwork/ORIGINAL_REQUEST.md`, implement the required fix/feature with genuine production logic "
@@ -280,6 +319,7 @@ async def execute_quick_workflow():
         phase="implementation",
         schema=WORKER_HANDOFF_SCHEMA,
         label="worker-quick-1",
+        model=cfg["model"],
     )
     for iteration in range(1, 4):
         verdicts = await run_gate(iteration, include_challenger=False)
@@ -293,6 +333,7 @@ async def execute_quick_workflow():
             log(f"Quick Gate Iteration {iteration} PASSED (APPROVE + CLEAN)!")
             return verdicts
         defects_json = json.dumps(defects, sort_keys=True)
+        rem_cfg = SUBAGENT_MODEL_TIERS["remediation"]
         await agent(
             f"You are Teamwork Remediation Worker `worker_quick_remediation_{iteration}`.\n"
             f"Fix all defects reported by Reviewer and Forensic Auditor:\n{defects_json}\n"
@@ -300,6 +341,7 @@ async def execute_quick_workflow():
             phase="remediation",
             schema=WORKER_HANDOFF_SCHEMA,
             label=f"worker-quick-remediation-{iteration}",
+            model=rem_cfg["model"],
         )
 
 
@@ -309,10 +351,14 @@ async def execute_full_workflow():
     track_tasks = [run_test_writer] + [
         (lambda m=m: run_milestone_worker(m)) for m in plan["milestones"]
     ]
+    # Phase 1: Dual-track fully parallel
     await parallel(track_tasks)
-    log("Phase 1 Dual-Track complete. Entering Verification Gate.")
+    log("Phase 1 Dual-Track complete. Entering Phase 2 Verification Gate.")
 
+    # Phase 2: Smart Gate loop with short-circuiting
+    seen_defect_signatures = set()
     for iteration in range(1, 4):
+        # All 3 Gate agents run in parallel
         verdicts = await run_gate(iteration, include_challenger=True)
         all_defects = []
         gate_passed = True
@@ -325,10 +371,21 @@ async def execute_full_workflow():
             log(f"Gate Iteration {iteration} PASSED (All APPROVE + Forensic Auditor CLEAN)!")
             break
 
-        log(f"Gate Iteration {iteration} FAILED with {len(all_defects)} defects. Launching remediation worker.")
-        if any("skill" in str(d).lower() or "command" in str(d).lower() for d in all_defects):
+        # Anti-Loop Short-Circuit: Detect repetitive identical defects
+        defect_sig = tuple(sorted(all_defects))
+        if defect_sig in seen_defect_signatures:
+            log(f"[SMART GATE SHORT-CIRCUIT] Identical defects detected across iterations. Escalating directly to Skill Optimizer and targeted architectural fix to prevent infinite looping.")
             await run_skill_optimizer(all_defects)
+        seen_defect_signatures.add(defect_sig)
+
+        log(f"Gate Iteration {iteration} FAILED with {len(all_defects)} defects. Launching remediation worker.")
+        
+        # Check if defects stem from tools or skills
+        if any("skill" in str(d).lower() or "command" in str(d).lower() or "not found" in str(d).lower() for d in all_defects):
+            await run_skill_optimizer(all_defects)
+
         defects_json = json.dumps(all_defects, sort_keys=True)
+        rem_cfg = SUBAGENT_MODEL_TIERS["remediation"]
         await agent(
             f"You are Teamwork Remediation Worker `worker_remediation_{iteration}`.\n"
             "Log failed approaches in `.agents/teamwork/orchestrator_1/DEAD_ENDS.md`, update `GATE_STATUS.md`, "
@@ -337,8 +394,10 @@ async def execute_full_workflow():
             phase="remediation",
             schema=WORKER_HANDOFF_SCHEMA,
             label=f"worker-remediation-{iteration}",
+            model=rem_cfg["model"],
         )
 
+    vic_cfg = SUBAGENT_MODEL_TIERS["victory_auditor"]
     victory = await agent(
         "You are Teamwork `victory_auditor` spawned by Sentinel.\n"
         "Independently verify every checkbox in `.agents/teamwork/ORIGINAL_REQUEST.md`, verify `GATE_STATUS.md`, "
@@ -347,6 +406,7 @@ async def execute_full_workflow():
         phase="victory_audit",
         schema=GATE_VERDICT_SCHEMA,
         label="victory-auditor",
+        model=vic_cfg["model"],
     )
     log(f"Victory Audit Verdict: {victory['verdict']}")
 
@@ -380,6 +440,7 @@ if __name__ == "__main__":
             "watchdog_window_minutes": WATCHDOG_WINDOW_MINUTES,
             "watchdog_pulse_seconds": WATCHDOG_PULSE_SECONDS,
             "runner_injected_globals": has_globals,
+            "subagent_model_tiers": SUBAGENT_MODEL_TIERS,
         }))
         sys.exit(0)
     asyncio.run(main())
