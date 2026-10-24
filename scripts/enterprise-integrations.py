@@ -121,16 +121,22 @@ class SkillContradictionResolver:
         if not contradictions:
             return True, "No opposing contradictions found"
 
-        # Apply bounded diff to deprecate conflicting directive in secondary skill
+        # Apply bounded diffs to deprecate all conflicting directives in secondary skill
+        current_text = text_b
+        resolved_count = 0
         for pat1, pat2 in contradictions:
-            m = re.search(pat2, text_b, re.IGNORECASE)
+            m = re.search(pat2, current_text, re.IGNORECASE)
             if m:
                 target = m.group(0)
                 replacement = f"DEPRECATED (ADR Override: See {primary_skill_path.name})"
-                ok, modified, msg = skillopt_engine.apply_bounded_edit(text_b, target, replacement)
+                ok, modified, msg = skillopt_engine.apply_bounded_edit(current_text, target, replacement)
                 if ok:
-                    secondary_skill_path.write_text(modified, encoding="utf-8")
-                    return True, f"Resolved contradiction: replaced '{target}' with deprecation note"
+                    current_text = modified
+                    resolved_count += 1
+
+        if resolved_count > 0:
+            secondary_skill_path.write_text(current_text, encoding="utf-8")
+            return True, f"Resolved {resolved_count} contradiction(s) in batch with deprecation notes"
 
         return False, "Could not resolve contradiction cleanly"
 

@@ -100,6 +100,22 @@ class SkillTokenOptimizer:
         return clipped.strip() + "\n"
 
 
+def audit_skill_file(skill_path: Path | str) -> dict:
+    """Convenience helper for auditing a skill file directly, returning dict metrics."""
+    optimizer = SkillTokenOptimizer()
+    audit = optimizer.analyze_skill_bloat(Path(skill_path))
+    return {
+        "skill_name": audit.skill_name,
+        "file_path": audit.file_path,
+        "token_estimate": audit.token_estimate,
+        "estimated_tokens": audit.token_estimate,
+        "line_count": audit.line_count,
+        "bloat_score": audit.bloat_score,
+        "issues": audit.issues,
+        "optimization_suggestions": audit.optimization_suggestions,
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description="Skill Token Bloat Analyzer & Linter")
     parser.add_argument("--skill", type=str, help="Specific SKILL.md to analyze")

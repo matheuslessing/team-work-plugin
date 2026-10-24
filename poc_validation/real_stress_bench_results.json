@@ -1,0 +1,33 @@
+{
+  "all_passed": true,
+  "total_duration_seconds": 1.4219586849212646,
+  "projects": [
+    {
+      "project": "1_rate_limiter",
+      "success": true,
+      "duration": 0.4606175422668457,
+      "tests": 3,
+      "concurrency_stress_threads": 50
+    },
+    {
+      "project": "2_circuit_breaker",
+      "success": true,
+      "duration": 0.5275352001190186,
+      "tests": 2
+    },
+    {
+      "project": "3_adr_linter",
+      "success": true,
+      "duration": 0.17424988746643066,
+      "tests": 2
+    },
+    {
+      "project": "4_skillopt_stress",
+      "success": true,
+      "duration": 0.21564960479736328,
+      "throughput_ops_sec": 463.7152017689331,
+      "interceptions_blocked": 100,
+      "cleaned_tokens": 35
+    }
+  ]
+}

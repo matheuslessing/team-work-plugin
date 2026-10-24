@@ -15,6 +15,36 @@ import os
 import sys
 
 
+def evaluate_tool_call(tool_call: dict) -> dict:
+    tool_name = tool_call.get("name", "")
+    tool_args = tool_call.get("args", {})
+    cmd = str(tool_args.get("CommandLine", ""))
+
+    # Check if the tool is attempting to run self-healing skill adoption
+    if "skillopt-engine.py adopt" in cmd or "devin-blueprint-optimizer.py" in cmd:
+        return {
+            "decision": "ask",
+            "reason": (
+                "[SELF-HEALING APPROVAL GATE] An automated self-healing action is about to mutate your project configuration or SKILL.md.\n"
+                f"Command: {cmd}\n"
+                "Do you approve applying this bounded diff to your workspace?"
+            ),
+        }
+
+    # Check if write_file / edit_file is modifying a skill directly
+    path_arg = str(tool_args.get("Path", "")).replace("\\", "/")
+    if ("skills" in path_arg and path_arg.endswith("SKILL.md")) and tool_name in ("write_file", "edit_file"):
+        return {
+            "decision": "ask",
+            "reason": (
+                f"[SKILL MUTATION GATE] An agent is attempting to modify `{path_arg}`.\n"
+                "Explicit user approval is required to update workspace skills."
+            ),
+        }
+
+    return {"decision": "allow"}
+
+
 def process_pre_tool_use_hook():
     try:
         raw_input = sys.stdin.read()
@@ -25,38 +55,8 @@ def process_pre_tool_use_hook():
 
         payload = json.loads(raw_input)
         tool_call = payload.get("toolCall", {})
-        tool_name = tool_call.get("name", "")
-        tool_args = tool_call.get("args", {})
-        cmd = str(tool_args.get("CommandLine", ""))
-
-        # Check if the tool is attempting to run self-healing skill adoption
-        if "skillopt-engine.py adopt" in cmd or "devin-blueprint-optimizer.py" in cmd:
-            output = {
-                "decision": "ask",
-                "reason": (
-                    "[SELF-HEALING APPROVAL GATE] An automated self-healing action is about to mutate your project configuration or SKILL.md.\n"
-                    f"Command: {cmd}\n"
-                    "Do you approve applying this bounded diff to your workspace?"
-                )
-            }
-            print(json.dumps(output))
-            return
-
-        # Check if write_file / edit_file is modifying a skill directly
-        path_arg = str(tool_args.get("Path", ""))
-        if ("skills" in path_arg and path_arg.endswith("SKILL.md")) and tool_name in ("write_file", "edit_file"):
-            output = {
-                "decision": "ask",
-                "reason": (
-                    f"[SKILL MUTATION GATE] An agent is attempting to modify `{path_arg}`.\n"
-                    "Explicit user approval is required to update workspace skills."
-                )
-            }
-            print(json.dumps(output))
-            return
-
-        # Default: allow harmless tool execution
-        print(json.dumps({"decision": "allow"}))
+        output = evaluate_tool_call(tool_call)
+        print(json.dumps(output))
 
     except Exception as e:
         # Fallback safe: allow if hook parser fails
