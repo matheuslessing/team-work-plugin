@@ -257,8 +257,10 @@ async def run_milestone_worker(milestone):
 
 async def run_gate(iteration: int, include_challenger: bool = True):
     """
-    Phase 2: Fully parallel verification gate with Frontier models.
-    All 3 gate subagents run concurrently on separate cloud child VMs.
+    Phase 2: Two-Stage Short-Circuiting Verification Gate.
+    Stage 2A (Functional & Empirical): Reviewer and Challenger run in parallel first.
+    If either requests changes, Phase 2 fails IMMEDIATELY without wasting VM compute on Forensic Auditor.
+    Stage 2B (Forensic Integrity): Runs ONLY after Reviewer and Challenger both APPROVE.
     """
     rev_cfg = SUBAGENT_MODEL_TIERS["reviewer"]
     aud_cfg = SUBAGENT_MODEL_TIERS["forensic_auditor"]
@@ -273,8 +275,35 @@ async def run_gate(iteration: int, include_challenger: bool = True):
         label=f"reviewer-iter-{iteration}",
         model=rev_cfg["model"],
     )
-    auditor_call = lambda: agent(
+
+    stage_2a_calls = [reviewer_call]
+    if include_challenger:
+        challenger_call = lambda: agent(
+            f"You are Teamwork Empirical Challenger `challenger_{iteration}` (READ-ONLY on project source).\n"
+            "Empirically stress-test boundary conditions, rapid state transitions, and edge cases.\n"
+            f"Write `.agents/teamwork/challenger_{iteration}/handoff.md` and output verdict `APPROVE` or `REQUEST_CHANGES`.",
+            phase="gate_verification",
+            schema=GATE_VERDICT_SCHEMA,
+            label=f"challenger-iter-{iteration}",
+            model=cha_cfg["model"],
+        )
+        stage_2a_calls.append(challenger_call)
+
+    # Step 1: Run Stage 2A in parallel (Reviewer + Challenger)
+    log(f"Phase 2A: Launching Reviewer {'+ Challenger' if include_challenger else ''} in parallel...")
+    stage_2a_verdicts = await parallel(stage_2a_calls)
+
+    # Check for early failure
+    stage_2a_failed = any(v["verdict"] == "REQUEST_CHANGES" for v in stage_2a_verdicts)
+    if stage_2a_failed:
+        log(f"Phase 2A REJECTED by Reviewer/Challenger. Short-circuiting: Skipping Forensic Auditor to save VM time.")
+        return stage_2a_verdicts
+
+    # Step 2: Run Stage 2B only if Stage 2A passed (Forensic Auditor final veto)
+    log(f"Phase 2A PASSED (All APPROVE). Launching Stage 2B: Forensic Integrity Auditor...")
+    auditor_verdict = await agent(
         f"You are Teamwork Forensic Integrity Auditor `auditor_{iteration}` (Binary Veto: `CLEAN` vs `INTEGRITY_VIOLATION`).\n"
+        "Reviewer and Challenger already APPROVED the functional requirements.\n"
         "Audit all production files, test suites, and test runners. Flag any self-certifying test tautologies, local mock lambdas, "
         "facade test runners, or production stubs.\n"
         f"Write `.agents/teamwork/auditor_{iteration}/audit_report.md` and `handoff.md`.",
@@ -283,20 +312,8 @@ async def run_gate(iteration: int, include_challenger: bool = True):
         label=f"forensic-auditor-iter-{iteration}",
         model=aud_cfg["model"],
     )
-    if not include_challenger:
-        return await parallel([reviewer_call, auditor_call])
 
-    challenger_call = lambda: agent(
-        f"You are Teamwork Empirical Challenger `challenger_{iteration}` (READ-ONLY on project source).\n"
-        "Empirically stress-test boundary conditions, rapid state transitions, and edge cases.\n"
-        f"Write `.agents/teamwork/challenger_{iteration}/handoff.md` and output verdict `APPROVE` or `REQUEST_CHANGES`.",
-        phase="gate_verification",
-        schema=GATE_VERDICT_SCHEMA,
-        label=f"challenger-iter-{iteration}",
-        model=cha_cfg["model"],
-    )
-    # Executed strictly in parallel across child VMs
-    return await parallel([reviewer_call, challenger_call, auditor_call])
+    return stage_2a_verdicts + [auditor_verdict]
 
 
 async def execute_survey_workflow():
