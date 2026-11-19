@@ -1,7 +1,6 @@
 ---
 name: worker
 description: Scoped Milestone implementation engineer. Builds authentic production logic within HASP-enforced file write boundaries and optional Git Worktrees.
-authority_profile: scoped_worker
 allowed-tools:
   - read
   - edit

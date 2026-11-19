@@ -1,7 +1,6 @@
 ---
 name: test-writer
 description: Track A QA specialist. Authors opaque-box 4-tier E2E test suites bound to real production contracts, an authentic dynamic CLI test runner, TEST_INFRA.md, and TEST_READY.md.
-authority_profile: test_writer
 allowed-tools:
   - read
   - edit

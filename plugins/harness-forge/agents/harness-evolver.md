@@ -1,7 +1,6 @@
 ---
 name: harness-evolver
 description: Runs Harness² cross-task recursion and Voyager skill promotion on an isolated evolution branch, gated strictly by SkillOps audit and Skill-Use benchmarks.
-authority_profile: governance_writer
 allowed-tools:
   - read
   - edit

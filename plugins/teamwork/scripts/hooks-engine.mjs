@@ -166,6 +166,10 @@ async function main() {
     continuationActive: Boolean(stdinObj.continuationActive)
   });
   console.log(JSON.stringify(out.json));
+  if (out.exitCode === 2) {
+    const errMsg = out.json?.reason || result?.reason || 'Blocked by HASP guardrail.';
+    process.stderr.write(`${errMsg}\n`);
+  }
   process.exit(out.exitCode);
 }
 

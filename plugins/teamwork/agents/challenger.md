@@ -1,7 +1,6 @@
 ---
 name: challenger
 description: Adversarial empirical stress tester. Attempts to break the implementation with boundary inputs, rapid state transitions, and concurrency stress without edit access.
-authority_profile: read_only
 allowed-tools:
   - read
   - grep

@@ -1,7 +1,6 @@
 ---
 name: doc-standardizer
 description: Converts existing READMEs, docs/, wikis, or undocumented source modules into validated PMSP .memory/ files with verified source_refs and compiled memory.rc.json.
-authority_profile: governance_writer
 allowed-tools:
   - read
   - edit

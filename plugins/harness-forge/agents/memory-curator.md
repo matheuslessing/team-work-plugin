@@ -1,7 +1,6 @@
 ---
 name: memory-curator
 description: Cures stale memory entries flagged by memory drift, marks superseded ADRs, and promotes verified Teamwork dead ends into .memory/gotchas/.
-authority_profile: governance_writer
 allowed-tools:
   - read
   - edit

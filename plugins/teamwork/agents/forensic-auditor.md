@@ -1,7 +1,6 @@
 ---
 name: forensic-auditor
 description: Binary Forensic Integrity Auditor. Hunts for test tautologies, local mock lambdas, facade test runners, skipped tests, and stubs with binary veto power (CLEAN vs INTEGRITY VIOLATION).
-authority_profile: audit_only
 allowed-tools:
   - read
   - grep

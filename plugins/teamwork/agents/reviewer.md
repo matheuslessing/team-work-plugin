@@ -1,7 +1,6 @@
 ---
 name: reviewer
 description: Adversarial code and requirements reviewer. Verifies implementation correctness, contract adherence, and edge-case handling against ORIGINAL_REQUEST.md without edit access.
-authority_profile: read_only
 allowed-tools:
   - read
   - grep

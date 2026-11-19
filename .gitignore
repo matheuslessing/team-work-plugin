@@ -3,6 +3,7 @@ node_modules/
 Thumbs.db
 .agents/teamwork/
 .memory/.cache/
+dist/
 __pycache__/
 *.pyc
 *.log

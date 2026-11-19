@@ -1,7 +1,6 @@
 ---
 name: skill-migrator
 description: Migrates legacy SKILL.md files and playbooks into SkillOps 5-tuple + HASP + Progressive Disclosure skills across project, global, or target plugin scopes.
-authority_profile: governance_writer
 allowed-tools:
   - read
   - edit

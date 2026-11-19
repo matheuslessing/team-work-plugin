@@ -1,7 +1,6 @@
 ---
 name: orchestrator
 description: Dispatch-only Project Orchestrator (orchestrator_1..N). Drives Survey -> Contract Freeze -> Dual-Track Worktrees -> Verification Gate -> Propose-Probe-Compose Remediation.
-authority_profile: dispatch_only
 max-nesting: 2
 allowed-tools:
   - read

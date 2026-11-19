@@ -225,7 +225,7 @@ export function resolveSkillTargetDir({ scope = 'project', target = '', workspac
   }
   if (scope === 'global') {
     const home = process.env.HOME || process.env.USERPROFILE || root;
-    return path.join(home, '.devin', 'skills');
+    return path.join(home, '.agents', 'skills');
   }
   if (scope === 'plugin' && pluginRoot) {
     return path.join(path.resolve(pluginRoot), 'skills');

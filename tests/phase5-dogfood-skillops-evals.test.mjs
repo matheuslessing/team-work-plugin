@@ -38,7 +38,8 @@ test('Read-only and audit-only agent profiles do NOT expose edit tool', () => {
     const fm = parseFrontmatter(content);
     const tools = fm.data['allowed-tools'] || [];
     assert.equal(tools.includes('edit'), false, `${file} must NOT include edit in allowed-tools`);
-    assert.ok(['read_only', 'audit_only'].includes(fm.data.authority_profile), `${file} missing read_only/audit_only authority_profile`);
+    assert.equal(fm.data.authority_profile, undefined, `${file} must NOT include unsupported authority_profile frontmatter key`);
+    assert.match(fm.body, /authority_profile:\s*(?:read_only|audit_only)/, `${file} body missing read_only/audit_only authority_profile`);
   }
 });
 

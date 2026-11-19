@@ -1,7 +1,6 @@
 ---
 name: victory-auditor
 description: Independent final Victory Auditor spawned by Sentinel before delivery. Verifies ORIGINAL_REQUEST.md acceptance criteria, GATE_STATUS.md, state.json, and live E2E tests without edit access.
-authority_profile: audit_only
 allowed-tools:
   - read
   - grep

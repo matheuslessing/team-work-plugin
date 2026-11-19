@@ -191,6 +191,7 @@ Or from a local clone (live editing):
 git clone https://github.com/matheuslessing/team-work-plugin.git
 devin plugins install --local ./team-work-plugin
 ```
+> **Windows Caveat:** `devin plugins install --local ./path` creates a directory symlink into Devin's plugin cache and requires Windows Developer Mode or an elevated shell (`os error 1314`). Installing from GitHub (`devin plugins install matheuslessing/team-work-plugin`, including `git-subdir` dependencies) extracts directly without elevation.
 
 ### 2. Install Individual Sub-Plugins Independently
 Each sub-plugin is 100% self-contained (`packages/core/` synced into `scripts/core/`):
@@ -200,7 +201,13 @@ devin plugins install --local ./plugins/harness-forge
 ```
 
 ### 3. Google Antigravity Setup (Dual-Target)
-Copy or symlink `plugins/teamwork/adapters/antigravity/*` and `plugins/harness-forge/adapters/antigravity/*` into the root of each plugin copy (or mount via Antigravity plugin discovery under `~/.gemini/config/plugins/`). Hooks automatically emit Antigravity's native contract (`decision: "allow"|"deny"`, `overwrite`, `injectSteps`, and `Stop` loop protection via `continuationActive`).
+Build self-contained Antigravity bundles (re-homes `AGENTS.md` to `rules/AGENTS.md`, formats `globs` for Antigravity YAML, and applies `adapters/antigravity/*`) and install via `agy`:
+```bash
+node scripts/build-antigravity.mjs
+agy plugin install ./dist/antigravity/teamwork
+agy plugin install ./dist/antigravity/harness-forge
+```
+Hooks automatically emit Antigravity's native contract (`decision: "allow"|"deny"`, `overwrite`, `injectSteps`, and `Stop` loop protection via `continuationActive`).
 
 ---
 
@@ -271,7 +278,7 @@ Copy or symlink `plugins/teamwork/adapters/antigravity/*` and `plugins/harness-f
 `harness-forge` never writes project memory or project skills inside the plugin repository. Every CLI tool, hook, and MCP call resolves the target project dynamically (`project_dir` / `--workdir` / `DEVIN_PROJECT_DIR` / `cwd`):
 
 * **`--scope project`** *(default)*: writes `<target-repo>/.memory/` and `<target-repo>/.agents/skills/`.
-* **`--scope global`**: writes `~/.devin/skills/` for personal cross-repo skills.
+* **`--scope global`**: writes `~/.agents/skills/` for personal cross-repo skills (recognized by both Devin CLI and Antigravity).
 * **`--scope plugin --target <dir>`**: writes `<dir>/skills/` when authoring or migrating skills into another plugin repository.
 * **Separate Documentation Repo**: set `FORGE_MEMORY_ROOT` or add `.forge.json` (`{"memoryRoot": "../docs-repo/.memory"}`) at the project root.
 

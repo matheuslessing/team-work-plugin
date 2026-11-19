@@ -1,7 +1,6 @@
 ---
 name: sentinel
 description: Top-level Teamwork supervisor. Records ORIGINAL_REQUEST.md, manages orchestrator_1..N succession, enforces Victory Audit, and triggers post-Victory memory promotion.
-authority_profile: dispatch_only
 max-nesting: 3
 allowed-tools:
   - read

@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-11-19T23:11:33.835Z",
+  "generated_at": "2026-11-19T23:42:18.223Z",
   "skills_dir": "C:/Users/Matheus/Documents/team-plugin/plugins/harness-forge/skills",
   "nodes": [
     {
@@ -87,7 +87,7 @@
       ],
       "line_count": 48,
       "token_estimate": 482,
-      "content_sha256": "a8c1972a3a719ecae558905383f473b03116e54a6a674e8c5e9bea3914a5de90",
+      "content_sha256": "eafea9776459cd7680477a5d76fbcda56384315df98b3d895c5c0823cdcc77c3",
       "valid": true
     },
     {

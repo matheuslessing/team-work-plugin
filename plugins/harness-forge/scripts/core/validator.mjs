@@ -364,6 +364,9 @@ export function validateMemoryIndexSync(memoryRoot, workspaceRoot = null) {
     }
     diskByPath.set(rel, {
       id: docCheck.data.id,
+      kind: docCheck.data.kind,
+      summary: docCheck.data.summary || '',
+      tags: Array.isArray(docCheck.data.tags) ? docCheck.data.tags : [],
       content_sha256: sha256Hex(raw)
     });
   }
@@ -373,8 +376,20 @@ export function validateMemoryIndexSync(memoryRoot, workspaceRoot = null) {
     const entry = rcByPath.get(rel);
     if (!entry) {
       errors.push(`memory.rc.json out of sync: missing entry for "${rel}" (run memory rebuild)`);
-    } else if (entry.content_sha256 && entry.content_sha256 !== meta.content_sha256) {
-      errors.push(`memory.rc.json out of sync: hash mismatch for "${rel}" (run memory rebuild)`);
+    } else {
+      if (!entry.content_sha256 || entry.content_sha256 !== meta.content_sha256) {
+        errors.push(`memory.rc.json out of sync: hash mismatch for "${rel}" (run memory rebuild)`);
+      }
+      if (entry.id !== meta.id || entry.kind !== meta.kind || (entry.summary || '') !== meta.summary) {
+        errors.push(`memory.rc.json out of sync: metadata mismatch for "${rel}" (run memory rebuild)`);
+      }
+      if (
+        !Array.isArray(entry.tags) ||
+        entry.tags.length !== meta.tags.length ||
+        entry.tags.some((t, idx) => t !== meta.tags[idx])
+      ) {
+        errors.push(`memory.rc.json out of sync: tags mismatch for "${rel}" (run memory rebuild)`);
+      }
     }
   }
   for (const rel of rcByPath.keys()) {

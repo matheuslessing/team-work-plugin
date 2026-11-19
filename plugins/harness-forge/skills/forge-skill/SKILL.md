@@ -19,7 +19,7 @@ Single entry-point for creating, checking, or routing skills in the target repos
 
 ## Target Scopes (Skill Scope Cascade)
 - `--scope project` *(default)*: `<repo>/.agents/skills/<name>/`
-- `--scope global`: `~/.devin/skills/<name>/`
+- `--scope global`: `~/.agents/skills/<name>/`
 - `--scope plugin --target <dir>`: `<dir>/skills/<name>/`
 
 ## Step 0: Smart Deterministic Triage (Zero LLM)

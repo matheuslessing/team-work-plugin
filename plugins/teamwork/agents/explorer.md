@@ -1,7 +1,6 @@
 ---
 name: explorer
 description: Read-only codebase surveyor and architecture investigator. Maps existing files, dependencies, root causes, and contracts without edit access.
-authority_profile: read_only
 allowed-tools:
   - read
   - grep
