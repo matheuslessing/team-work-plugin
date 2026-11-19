@@ -21,7 +21,7 @@ import {
   searchMemory,
   upsertMemoryDoc
 } from '../scripts/lib/memory-engine.mjs';
-import { buildEcosystemGraph, resolveSkillTargetDir, scaffoldSkill } from '../scripts/lib/skillops.mjs';
+import { buildEcosystemGraph, resolveSkillTargetDir, scaffoldSkill, triageSkills } from '../scripts/lib/skillops.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -186,6 +186,18 @@ const ALL_TOOLS = [
     }
   },
   {
+    name: 'skill_triage',
+    readTool: true,
+    description: 'Deterministically triage a skill or skills directory and recommend SCAFFOLD, MIGRATE, SKILLOPS_FIX, EVAL_EVOLVE, or CLEAN.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project_dir: { type: 'string' },
+        target: { type: 'string' }
+      }
+    }
+  },
+  {
     name: 'skill_validate',
     readTool: false,
     description: 'Validate a skill directory against SkillOps 5-tuple and Progressive Disclosure rules.',
@@ -270,6 +282,8 @@ async function handleToolCall(name, args = {}) {
         : path.join(projectDir, '.agents', 'skills');
       return buildEcosystemGraph(skillsDir, { write: Boolean(args.write) });
     }
+    case 'skill_triage':
+      return triageSkills({ targetPath: args.target || '', workspaceRoot: projectDir });
     case 'skill_validate':
       return validateSkillDir(path.resolve(projectDir, args.skill_dir));
     case 'skill_scaffold': {

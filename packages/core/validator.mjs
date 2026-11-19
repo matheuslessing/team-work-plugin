@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { estimateTokens, normalizePosix, parseFrontmatter, sha256Hex } from './frontmatter.mjs';
+import { scanPromptSecurity } from './security-scanner.mjs';
 
 const KEBAB_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const SEMVER_RE = /^\d+\.\d+\.\d+$/;
@@ -37,6 +38,10 @@ export function validateSkillDir(skillDir) {
   }
 
   const skillContent = fs.readFileSync(skillMdPath, 'utf8');
+  const skillSec = scanPromptSecurity(skillContent, { filePath: skillMdPath });
+  for (const f of skillSec.findings) {
+    errors.push(`[SECURITY:${f.code}] SKILL.md:${f.line} — ${f.message}`);
+  }
   const byteSize = Buffer.byteLength(skillContent, 'utf8');
   const lineCount = skillContent.split(/\r?\n/).length;
   const fm = parseFrontmatter(skillContent);
@@ -67,8 +72,13 @@ export function validateSkillDir(skillDir) {
   }
 
   let contract = null;
+  const contractRaw = fs.readFileSync(contractPath, 'utf8');
+  const contractSec = scanPromptSecurity(contractRaw, { filePath: contractPath });
+  for (const f of contractSec.findings) {
+    errors.push(`[SECURITY:${f.code}] skill.contract.json:${f.line} — ${f.message}`);
+  }
   try {
-    contract = JSON.parse(fs.readFileSync(contractPath, 'utf8'));
+    contract = JSON.parse(contractRaw);
   } catch (err) {
     errors.push(`Invalid JSON in skill.contract.json: ${err.message}`);
     return { ok: false, errors, warnings, meta: { folderName } };
@@ -180,6 +190,10 @@ export function validateSkillDir(skillDir) {
 export function validateMemoryDoc(filePath, content, workspaceRoot, { checkDisk = true } = {}) {
   const errors = [];
   const warnings = [];
+  const sec = scanPromptSecurity(content, { filePath });
+  for (const f of sec.findings) {
+    errors.push(`${filePath}: [SECURITY:${f.code}] line ${f.line} — ${f.message}`);
+  }
   const fm = parseFrontmatter(content);
 
   if (!fm.hasFrontmatter) {

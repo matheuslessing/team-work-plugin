@@ -23,7 +23,9 @@ Produce an empirical, contract-ready architecture plan (`<active_orchestrator>/P
 2. **Partition & Dispatch Parallel Explorers**:
    - Transition state to `SURVEY` (`teamwork-cli.mjs state transition SURVEY`).
    - Spawn 2–3 `teamwork:explorer` agents (`authority_profile: read_only`) with `DISPATCH.md` covering distinct domains.
-3. **Synthesize `<active_orchestrator>/PROJECT.md`**:
-   - Merge all Explorer `handoff.md` findings into `PROJECT.md` with: `## Architecture`, `## Feature Inventory`, `## Milestones`, `## Interface Contracts`, and `## Code Layout` (assigning strictly disjoint `Own exclusively:` paths per milestone).
+3. **Design It Twice & Synthesize `<active_orchestrator>/PROJECT.md`**:
+   - For critical or shared subsystem boundaries, explore **2 candidate deep-module interface designs** (Ousterhout depth/seam/leverage) before locking signatures.
+   - Partition `## Milestones` into independently testable **Vertical Slices** (`M1..Mn`, end-to-end deliverable slices rather than disconnected horizontal layers) with disjoint `Own exclusively:` paths.
+   - Merge all Explorer `handoff.md` findings into `PROJECT.md` with: `## Architecture`, `## Feature Inventory`, `## Milestones`, `## Interface Contracts`, and `## Code Layout`.
 4. **Next Gate**:
    - Run `/team-contract-freeze` to hash `§ Interface Contracts` before starting Dual-Track workers.

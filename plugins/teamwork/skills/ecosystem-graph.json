@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-11-19T22:37:15.748Z",
+  "generated_at": "2026-11-19T23:11:33.667Z",
   "skills_dir": "C:/Users/Matheus/Documents/team-plugin/plugins/teamwork/skills",
   "nodes": [
     {
@@ -16,7 +16,8 @@
         "pf-handoff-completeness"
       ],
       "line_count": 29,
-      "token_estimate": 303,
+      "token_estimate": 310,
+      "content_sha256": "f9f4db70a96ee9151b8d9f302da0b62a1182634dc35dc19f983a25a629207baf",
       "valid": true
     },
     {
@@ -29,7 +30,8 @@
         "pf-loop-breaker"
       ],
       "line_count": 30,
-      "token_estimate": 328,
+      "token_estimate": 335,
+      "content_sha256": "b581ee3df02c63377e276e664d219abb5c51b0dd42da911404cd29ff7e18e8bd",
       "valid": true
     },
     {
@@ -43,7 +45,8 @@
         "pf-loop-breaker"
       ],
       "line_count": 32,
-      "token_estimate": 356,
+      "token_estimate": 364,
+      "content_sha256": "2a8c78738c3a2ab08cfb4312c0419e69bb3cb8802b82993fd670c41c56165afb",
       "valid": true
     },
     {
@@ -56,7 +59,8 @@
         "pf-write-boundary"
       ],
       "line_count": 29,
-      "token_estimate": 270,
+      "token_estimate": 277,
+      "content_sha256": "78b6b029ad05610c2e5cc776fc3e7567eaa286972baabebdc16e78bef8f8e598",
       "valid": true
     },
     {
@@ -69,8 +73,9 @@
         "pf-write-boundary",
         "pf-loop-breaker"
       ],
-      "line_count": 42,
-      "token_estimate": 583,
+      "line_count": 43,
+      "token_estimate": 667,
+      "content_sha256": "71d2fb9cf59bfd862f0c252d9bb1a42b45722fedbf9508f394dcabdcea4979c2",
       "valid": true
     },
     {
@@ -84,7 +89,8 @@
         "pf-handoff-completeness"
       ],
       "line_count": 31,
-      "token_estimate": 339,
+      "token_estimate": 347,
+      "content_sha256": "804c3f56ff0fe18b9ccdcd50ab7e271444f440d92fbe3425d6779b1a4169fdc3",
       "valid": true
     },
     {
@@ -99,7 +105,8 @@
         "pf-handoff-completeness"
       ],
       "line_count": 31,
-      "token_estimate": 349,
+      "token_estimate": 356,
+      "content_sha256": "2e7b7634c4475dec14dc05fb732f58ef6df8845e884577896efe4dc725d127ff",
       "valid": true
     },
     {
@@ -114,7 +121,8 @@
         "pf-loop-breaker"
       ],
       "line_count": 41,
-      "token_estimate": 610,
+      "token_estimate": 620,
+      "content_sha256": "2bef317ca612a44773694aeb2e847e27522ab96f3edfa18797ebeba525517999",
       "valid": true
     },
     {
@@ -125,7 +133,8 @@
       "authority_profile": "read_only",
       "program_functions": [],
       "line_count": 28,
-      "token_estimate": 240,
+      "token_estimate": 247,
+      "content_sha256": "7136a04a0e480300e94d1e681cd4692e3ec263da861677000315d65c8250aced",
       "valid": true
     },
     {
@@ -138,8 +147,9 @@
         "pf-write-boundary",
         "pf-handoff-completeness"
       ],
-      "line_count": 30,
-      "token_estimate": 359,
+      "line_count": 32,
+      "token_estimate": 446,
+      "content_sha256": "f1064e14dbad4a76a997ba218cc9a168e80d4ef41cf43b96b789297e4e8ea65f",
       "valid": true
     },
     {
@@ -155,7 +165,8 @@
         "pf-handoff-completeness"
       ],
       "line_count": 26,
-      "token_estimate": 311,
+      "token_estimate": 317,
+      "content_sha256": "5d03b4c590f72997cb92c6999a78b04d42c12a9ab5ab2818b458856ecb186636",
       "valid": true
     },
     {
@@ -168,7 +179,8 @@
         "pf-write-boundary"
       ],
       "line_count": 28,
-      "token_estimate": 292,
+      "token_estimate": 299,
+      "content_sha256": "d20cf4f67050472a894ae2a385dea3e0444914834dd1bd4093e19445efe4d927",
       "valid": true
     }
   ],

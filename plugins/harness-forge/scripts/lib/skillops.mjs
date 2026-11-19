@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { estimateTokens, normalizePosix, parseFrontmatter, serializeFrontmatter } from '../core/frontmatter.mjs';
+import { estimateTokens, normalizePosix, parseFrontmatter, serializeFrontmatter, sha256Hex } from '../core/frontmatter.mjs';
 import { validateSkillDir } from '../core/validator.mjs';
 
 function tokenize(text) {
@@ -43,6 +43,10 @@ export function buildEcosystemGraph(skillsDir, { write = false } = {}) {
     const name = res.meta?.name || path.basename(dir);
     const contract = res.meta?.contract || {};
     const desc = res.meta?.description || '';
+    const skillMdRaw = fs.existsSync(path.join(dir, 'SKILL.md')) ? fs.readFileSync(path.join(dir, 'SKILL.md'), 'utf8') : '';
+    const contractRaw = fs.existsSync(path.join(dir, 'skill.contract.json'))
+      ? fs.readFileSync(path.join(dir, 'skill.contract.json'), 'utf8')
+      : '';
     nodes.push({
       id: name,
       version: contract.version || '0.0.0',
@@ -52,6 +56,7 @@ export function buildEcosystemGraph(skillsDir, { write = false } = {}) {
       program_functions: contract.O_operation?.program_functions || [],
       line_count: res.meta?.lineCount || 0,
       token_estimate: res.meta?.tokenEstimate || 0,
+      content_sha256: sha256Hex(`${skillMdRaw}\n${contractRaw}`),
       valid: res.ok
     });
     tokenSets.set(name, new Set(tokenize(`${name} ${desc}`)));
@@ -106,7 +111,7 @@ export function buildEcosystemGraph(skillsDir, { write = false } = {}) {
   return graph;
 }
 
-export function auditSkills(skillsDir, { strict = false } = {}) {
+export function auditSkills(skillsDir, { strict = false, telemetryPath = null } = {}) {
   const abs = path.resolve(skillsDir);
   const dirs = listSkillDirs(abs);
   const errors = [];
@@ -115,6 +120,17 @@ export function auditSkills(skillsDir, { strict = false } = {}) {
   const validSkills = [];
   const programsDir = path.join(path.dirname(abs), 'programs');
   const hasProgramsDir = fs.existsSync(programsDir);
+
+  let baselineBySkill = new Map();
+  const baselineGraphPath = path.join(abs, 'ecosystem-graph.json');
+  if (fs.existsSync(baselineGraphPath)) {
+    try {
+      const prevGraph = JSON.parse(fs.readFileSync(baselineGraphPath, 'utf8'));
+      baselineBySkill = new Map((prevGraph.nodes || []).map((n) => [n.id, n]));
+    } catch {
+      // ignore invalid baseline graph
+    }
+  }
 
   for (const dir of dirs) {
     const res = validateSkillDir(dir);
@@ -128,6 +144,20 @@ export function auditSkills(skillsDir, { strict = false } = {}) {
     warnings.push(...res.warnings.map((w) => `[${name}] ${w}`));
 
     const contract = res.meta?.contract;
+    const prevNode = baselineBySkill.get(name);
+    if (prevNode?.content_sha256 && contract) {
+      const skillMdRaw = fs.existsSync(path.join(dir, 'SKILL.md')) ? fs.readFileSync(path.join(dir, 'SKILL.md'), 'utf8') : '';
+      const contractRaw = fs.existsSync(path.join(dir, 'skill.contract.json'))
+        ? fs.readFileSync(path.join(dir, 'skill.contract.json'), 'utf8')
+        : '';
+      const currentSha = sha256Hex(`${skillMdRaw}\n${contractRaw}`);
+      if (currentSha !== prevNode.content_sha256 && prevNode.version === contract.version) {
+        warnings.push(
+          `[${name}] Silent modification detected without version bump (${contract.version}) — run skillops graph or bump semver`
+        );
+      }
+    }
+
     if (contract && hasProgramsDir) {
       for (const pfId of contract.O_operation?.program_functions || []) {
         const pfFile = path.join(programsDir, `${pfId}.pf.mjs`);
@@ -158,6 +188,22 @@ export function auditSkills(skillsDir, { strict = false } = {}) {
       action: 'merge',
       reason: `High description overlap (${red.similarity}) without alternative_to edge`
     });
+  }
+
+  const resolvedTelemetry =
+    telemetryPath || path.resolve(abs, '..', '..', '.agents', 'teamwork', 'skill-telemetry.jsonl');
+  if (resolvedTelemetry && fs.existsSync(resolvedTelemetry)) {
+    const tel = summarizeTelemetry(resolvedTelemetry);
+    for (const [skillName, st] of Object.entries(tel.skills || {})) {
+      const failRate = st.invocations > 0 ? st.failures / st.invocations : 0;
+      if (st.invocations >= 3 && failRate >= 0.6) {
+        maintenanceActions.push({
+          skill: skillName,
+          action: 'retire',
+          reason: `High failure rate in telemetry (${st.failures}/${st.invocations} = ${Math.round(failRate * 100)}%)`
+        });
+      }
+    }
   }
 
   return {
@@ -337,4 +383,166 @@ export function summarizeTelemetry(telemetryPath) {
     }
   }
   return { skills: stats };
+}
+
+function hasEvolutionEvidence(workspaceRoot) {
+  const root = path.resolve(workspaceRoot);
+  if (fs.existsSync(path.join(root, 'tests', 'evals', 'skill-use', 'suite.json'))) return true;
+  if (fs.existsSync(path.join(root, '.agents', 'teamwork', 'skill-bom.json'))) return true;
+  const twRoot = path.join(root, '.agents', 'teamwork');
+  if (fs.existsSync(twRoot)) {
+    for (const entry of fs.readdirSync(twRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !/^orchestrator_\d+$/.test(entry.name)) continue;
+      const dePath = path.join(twRoot, entry.name, 'DEAD_ENDS.md');
+      if (fs.existsSync(dePath)) {
+        const rows = fs
+          .readFileSync(dePath, 'utf8')
+          .split(/\r?\n/)
+          .filter((l) => l.trim().startsWith('|') && !l.includes('Approach Tried') && !l.includes('---'));
+        if (rows.length > 0) return true;
+      }
+    }
+  }
+  return false;
+}
+
+export function triageSkills({ targetPath = '', workspaceRoot = process.cwd() } = {}) {
+  const root = path.resolve(workspaceRoot);
+  const absTarget = targetPath ? path.resolve(root, targetPath) : path.join(root, '.agents', 'skills');
+  const relTarget = normalizePosix(path.relative(root, absTarget)) || '.';
+
+  if (!fs.existsSync(absTarget)) {
+    return {
+      action: 'SCAFFOLD',
+      target: relTarget,
+      reason: 'Target skill or skills directory does not exist yet.',
+      next_command: '/forge-skill',
+      details: {}
+    };
+  }
+
+  const stat = fs.statSync(absTarget);
+  if (stat.isFile()) {
+    if (absTarget.endsWith('.md')) {
+      return {
+        action: 'MIGRATE',
+        target: relTarget,
+        reason: 'Single Markdown file without SkillOps contract directory.',
+        next_command: '/forge-migrate-skill',
+        details: analyzeLegacySkill(absTarget)
+      };
+    }
+    return {
+      action: 'SKILLOPS_FIX',
+      target: relTarget,
+      reason: 'Target file is not a valid skill directory.',
+      next_command: '/forge-validate',
+      details: {}
+    };
+  }
+
+  const hasSkillMd = fs.existsSync(path.join(absTarget, 'SKILL.md'));
+  const hasContract = fs.existsSync(path.join(absTarget, 'skill.contract.json'));
+
+  if (hasSkillMd && !hasContract) {
+    return {
+      action: 'MIGRATE',
+      target: relTarget,
+      reason: 'Legacy skill folder has SKILL.md without skill.contract.json.',
+      next_command: '/forge-migrate-skill',
+      details: analyzeLegacySkill(absTarget)
+    };
+  }
+
+  if (hasSkillMd && hasContract) {
+    const val = validateSkillDir(absTarget);
+    if (!val.ok || val.warnings.length > 0) {
+      return {
+        action: 'SKILLOPS_FIX',
+        target: relTarget,
+        reason: !val.ok ? val.errors.join('; ') : val.warnings.join('; '),
+        next_command: '/forge-validate',
+        details: val
+      };
+    }
+    if (hasEvolutionEvidence(root)) {
+      return {
+        action: 'EVAL_EVOLVE',
+        target: relTarget,
+        reason: 'Skill is valid and evolution/eval signals exist in workspace.',
+        next_command: '/forge-evolve',
+        details: { name: val.meta?.name }
+      };
+    }
+    return {
+      action: 'CLEAN',
+      target: relTarget,
+      reason: 'Skill passes SkillOps 5-tuple & security checks cleanly.',
+      next_command: 'none',
+      details: { name: val.meta?.name }
+    };
+  }
+
+  // Directory containing multiple skills
+  const subDirs = fs
+    .readdirSync(absTarget, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => path.join(absTarget, d.name));
+
+  if (subDirs.length === 0) {
+    return {
+      action: 'SCAFFOLD',
+      target: relTarget,
+      reason: 'Skills directory exists but contains no skill folders.',
+      next_command: '/forge-skill',
+      details: {}
+    };
+  }
+
+  const legacyFolders = subDirs
+    .filter((d) => fs.existsSync(path.join(d, 'SKILL.md')) && !fs.existsSync(path.join(d, 'skill.contract.json')))
+    .map((d) => normalizePosix(path.relative(root, d)));
+
+  if (legacyFolders.length > 0) {
+    return {
+      action: 'MIGRATE',
+      target: relTarget,
+      reason: `Found ${legacyFolders.length} legacy skill(s) missing skill.contract.json.`,
+      next_command: '/forge-migrate-skill',
+      details: { legacy_folders: legacyFolders }
+    };
+  }
+
+  const audit = auditSkills(absTarget, { strict: true });
+  if (!audit.ok || audit.warnings.length > 0 || audit.maintenanceActions.length > 0) {
+    return {
+      action: 'SKILLOPS_FIX',
+      target: relTarget,
+      reason: audit.errors[0] || audit.warnings[0] || audit.maintenanceActions[0]?.reason || 'SkillOps audit flagged issues.',
+      next_command: '/forge-skillops',
+      details: {
+        errors: audit.errors,
+        warnings: audit.warnings,
+        maintenanceActions: audit.maintenanceActions
+      }
+    };
+  }
+
+  if (hasEvolutionEvidence(root)) {
+    return {
+      action: 'EVAL_EVOLVE',
+      target: relTarget,
+      reason: 'All skills pass SkillOps audit and workspace has eval/BOM/dead-end signals.',
+      next_command: '/forge-evolve',
+      details: { totalSkills: audit.totalSkills }
+    };
+  }
+
+  return {
+    action: 'CLEAN',
+    target: relTarget,
+    reason: `All ${audit.totalSkills} skill(s) pass SkillOps audit with zero warnings or pending maintenance.`,
+    next_command: 'none',
+    details: { totalSkills: audit.totalSkills }
+  };
 }

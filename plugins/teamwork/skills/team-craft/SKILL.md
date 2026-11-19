@@ -18,7 +18,8 @@ triggers:
 Craft an objective requirement specification in `.agents/teamwork/prompt_draft.md`, lock it into `.agents/teamwork/ORIGINAL_REQUEST.md`, and route to the optimal execution tier.
 
 ## Core Rules
-- **Specify What, Not How**: Define requirements (`R1..Rn`) and checkable criteria; avoid dictating code structure unless requested.
+- **Specify What, Not How**: Define requirements (`R1..Rn`), explicit **Out-of-Scope** exclusions, and checkable criteria; avoid dictating code structure unless requested.
+- **Grill-Me Decision Tree**: Walk through ambiguities **one logical branch at a time** (resolving dependencies sequentially rather than dumping all questions at once), and record domain terms in `.memory/contracts/glossary.md` when `.memory/` exists.
 - **Complexity Router** (from *The Agent Loop*):
   - **Tier S (Single-file trivial edit)**: Handle directly with standard tests (avoid multi-agent overhead).
   - **Tier M (Contained bug fix / 1-module feature)**: Route to `/team-quick`.

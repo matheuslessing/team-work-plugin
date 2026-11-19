@@ -210,7 +210,7 @@ Copy or symlink `plugins/teamwork/adapters/antigravity/*` and `plugins/harness-f
 
 1. **Craft Requirements & Route Complexity (`/team-craft`)**
    Start any non-trivial task with `/team-craft <your idea>`:
-   - Walks through 9 structured steps in `.agents/teamwork/prompt_draft.md`.
+   - Walks through 9 steps using a **Grill-Me Decision Tree** (resolves ambiguities one logical branch at a time, records **Out-of-Scope** exclusions & glossary terms).
    - Applies the **Complexity Router**:
      - **Tier S (trivial 1-file fix)**: handle directly with normal tests (zero multi-agent overhead).
      - **Tier M (contained bug/feature)**: launches `/team-quick`.
@@ -218,7 +218,8 @@ Copy or symlink `plugins/teamwork/adapters/antigravity/*` and `plugins/harness-f
    - On approval, locks `.agents/teamwork/ORIGINAL_REQUEST.md` and initializes `state.json` + `view.json`.
 
 2. **Survey Memory & Freeze Contracts (`/team-survey` -> `/team-contract-freeze`)**
-   - Explorers (`authority_profile: read_only`, `edit` disabled) consult `.memory/memory.rc.json` and check drift first, then map the codebase into `<active_orchestrator>/PROJECT.md`.
+   - Explorers (`authority_profile: read_only`, `edit` disabled) consult `.memory/memory.rc.json` and check drift first.
+   - Orchestrator applies **Design It Twice** on shared boundaries and slices milestones into independently testable **Vertical Slices** inside `<active_orchestrator>/PROJECT.md` (reconciling live code on succession).
    - `/team-contract-freeze` SHA-256 hashes `PROJECT.md § Interface Contracts` into `state.json` (`CONTRACT_FROZEN`) so Track A and Track B code against identical signatures.
 
 3. **Dual-Track Execution in Isolated Worktrees (`/team-test-track` + `/team-worktree`)**
@@ -286,17 +287,19 @@ Open any existing project repository and run:
    - Inspects legacy `SKILL.md` / markdown playbooks with `forge-cli.mjs skill analyze-legacy`.
    - Splits oversized content (`> 220` lines) into `references/` for **Progressive Disclosure**.
    - Generates typed `skill.contract.json` (`P_preconditions`, `O_operation`, `A_artifacts`, `V_validators`, `F_failure_modes`, `ecosystem_edges`) and optional HASP `.pf.mjs` guards.
-2. **Create a new skill (`/forge-skill <name>`)**:
+2. **Smart Skill Triage & Scaffolding (`/forge-skill [target]`)**:
+   - Single entry-point: runs `forge-cli.mjs skill triage` (or MCP `skill_triage`) in zero-LLM mode to decide automatically between `SCAFFOLD`, `MIGRATE` (`/forge-migrate-skill`), `SKILLOPS_FIX` (`/forge-skillops`), `EVAL_EVOLVE` (`/forge-evolve`), or `CLEAN`.
    - Scaffolds compliant `SKILL.md` + `skill.contract.json` in `project`, `global`, or `plugin` scope.
-3. **Audit & Evolve (`/forge-skillops` + `/forge-evolve`)**:
-   - Builds `ecosystem-graph.json` (detects overlaps, broken edges, missing HASP validators at zero LLM cost).
+3. **Audit, Security & Evolve (`/forge-skillops` + `/forge-evolve`)**:
+   - Builds `ecosystem-graph.json` with SHA-256 baselines (detects overlaps, silent unversioned modifications, high-failure `retire` candidates, and missing HASP validators at zero LLM cost).
+   - Validates every skill & memory doc through `scanPromptSecurity` (blocks hidden zero-width Unicode, `curl | bash` DDIPE payloads, credential exfiltration, and prompt injection overrides).
    - Evaluates skills with `Skill-Use` (`Trigger × Compliance × Boundary`).
 
 ### All `/forge-*` Slash Commands
 
 | Command | Purpose |
 | :--- | :--- |
-| `/forge-skill` | Scaffold and validate a new skill (`SKILL.md` + `skill.contract.json`) in `project`, `global`, or `plugin` scope. |
+| `/forge-skill` | Smart deterministic skill triage (`skill triage`) + scaffold/validate skills (`SKILL.md` + `skill.contract.json`) in `project`, `global`, or `plugin` scope. |
 | `/forge-migrate-skill` | Analyze & upgrade any legacy `SKILL.md` or playbook to SkillOps 5-tuple + HASP + Progressive Disclosure. |
 | `/forge-memory` | Initialize `.memory/`, search (`BM25` / `SQLite FTS5`), read sections surgically, record ADRs, and promote gotchas. |
 | `/forge-migrate-docs` | Standardize existing `docs/`/`README.md` or map codebases into `.memory/` with disk-verified `source_refs`. |
@@ -324,7 +327,7 @@ Configured in `plugins/harness-forge/.mcp.json` (Devin) or `adapters/antigravity
 
 | Mode (`FORGE_MCP_MODE`) | Exposed Tools | When to Use |
 | :--- | :--- | :--- |
-| **`full`** *(default)* | All 12 tools: `memory_index`, `memory_search`, `memory_read`, `memory_drift`, `memory_upsert`, `memory_record_adr`, `memory_retire`, `memory_rebuild_index`, `skill_index`, `skill_graph`, `skill_validate`, `skill_scaffold` | Standalone / personal / new projects using our embedded MCP for both read and write. |
+| **`full`** *(default)* | All 13 tools: `memory_index`, `memory_search`, `memory_read`, `memory_drift`, `memory_upsert`, `memory_record_adr`, `memory_retire`, `memory_rebuild_index`, `skill_index`, `skill_graph`, `skill_triage`, `skill_validate`, `skill_scaffold` | Standalone / personal / new projects using our embedded MCP for both read and write. |
 | **`validator-only`** | 7 governance/write tools (`memory_drift`, `memory_upsert`, `memory_record_adr`, `memory_retire`, `memory_rebuild_index`, `skill_validate`, `skill_scaffold`) | **Enterprise coexistence**: pair with your company's existing read-only `rcjson` MCP (`memory.rc.json` + `.md` layout stays 100% compatible and protected by Barriers 2–4). |
 
 ```json

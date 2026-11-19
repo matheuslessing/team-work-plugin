@@ -26,7 +26,8 @@ import {
   buildEcosystemGraph,
   resolveSkillTargetDir,
   scaffoldSkill,
-  summarizeTelemetry
+  summarizeTelemetry,
+  triageSkills
 } from './lib/skillops.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -144,6 +145,9 @@ function cmdSkill() {
   } else if (sub === 'analyze-legacy') {
     const target = args[2] || getFlag('--path', '');
     console.log(JSON.stringify(analyzeLegacySkill(path.resolve(workdir, target)), null, 2));
+  } else if (sub === 'triage') {
+    const target = getFlag('--target', args[2] && !args[2].startsWith('--') ? args[2] : '');
+    console.log(JSON.stringify(triageSkills({ targetPath: target, workspaceRoot: workdir }), null, 2));
   } else {
     const target = args[2] || getFlag('--dir', '.');
     const res = validateSkillDir(path.resolve(workdir, target));
@@ -162,7 +166,11 @@ function cmdSkillOps() {
     const telPath = getFlag('--file', path.join(workdir, '.agents', 'teamwork', 'skill-telemetry.jsonl'));
     console.log(JSON.stringify(summarizeTelemetry(path.resolve(workdir, telPath)), null, 2));
   } else {
-    const report = auditSkills(skillsDir, { strict: hasFlag('--strict') });
+    const telFlag = getFlag('--telemetry', '');
+    const report = auditSkills(skillsDir, {
+      strict: hasFlag('--strict'),
+      telemetryPath: telFlag ? path.resolve(workdir, telFlag) : null
+    });
     console.log(JSON.stringify({
       ok: report.ok,
       skillsDir: report.skillsDir,
