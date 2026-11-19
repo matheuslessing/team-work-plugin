@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://teamwork-suite.dev/schemas/handoff.v1.json",
+  "title": "Teamwork 5-Component Handoff Report",
+  "type": "object",
+  "required": ["sections", "has_invalidation_conditions"],
+  "properties": {
+    "sections": {
+      "type": "object",
+      "required": ["observation", "logic_chain", "caveats", "conclusion", "verification_method"],
+      "properties": {
+        "observation": { "type": "string", "minLength": 1 },
+        "logic_chain": { "type": "string", "minLength": 1 },
+        "caveats": { "type": "string", "minLength": 1 },
+        "conclusion": { "type": "string", "minLength": 1 },
+        "verification_method": { "type": "string", "minLength": 1 }
+      }
+    },
+    "has_invalidation_conditions": { "type": "boolean", "const": true },
+    "verdict": {
+      "type": ["string", "null"],
+      "enum": ["APPROVE", "REQUEST_CHANGES", "CLEAN", "INTEGRITY VIOLATION", "REJECT", null]
+    }
+  }
+}

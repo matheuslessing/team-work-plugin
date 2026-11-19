@@ -1,0 +1,294 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-11-19T22:32:46.278Z",
+  "skills_dir": "C:/Users/Matheus/Documents/team-plugin/plugins/harness-forge/skills",
+  "nodes": [
+    {
+      "id": "forge-drift",
+      "version": "1.0.0",
+      "description": "Compare source_refs SHA-256 hashes and symbol references against current files on disk to flag and cure stale project memory.",
+      "token_budget_tier": "low",
+      "authority_profile": "read_only",
+      "program_functions": [
+        "pf-memory-guard"
+      ],
+      "line_count": 26,
+      "token_estimate": 243,
+      "valid": true
+    },
+    {
+      "id": "forge-evolve",
+      "version": "1.0.0",
+      "description": "Run Harness2 cross-task recursion and Voyager promotion: extract verified lessons into .memory/, propose HASP PFs, and gate with Skill-Use evals.",
+      "token_budget_tier": "medium",
+      "authority_profile": "governance_writer",
+      "program_functions": [
+        "pf-memory-guard",
+        "pf-skill-contract-guard"
+      ],
+      "line_count": 35,
+      "token_estimate": 374,
+      "valid": true
+    },
+    {
+      "id": "forge-memory",
+      "version": "1.0.0",
+      "description": "Initialize, query, record ADRs, and manage Project Memory (.memory/ + compiled memory.rc.json) with zero-trust validation.",
+      "token_budget_tier": "low",
+      "authority_profile": "governance_writer",
+      "program_functions": [
+        "pf-rcjson-readonly",
+        "pf-memory-guard"
+      ],
+      "line_count": 29,
+      "token_estimate": 340,
+      "valid": true
+    },
+    {
+      "id": "forge-migrate-docs",
+      "version": "1.0.0",
+      "description": "Ingest existing docs or map undocumented codebases into standardized PMSP .memory/ notes with verified source_refs and compiled memory.rc.json.",
+      "token_budget_tier": "medium",
+      "authority_profile": "governance_writer",
+      "program_functions": [
+        "pf-rcjson-readonly",
+        "pf-memory-guard"
+      ],
+      "line_count": 33,
+      "token_estimate": 342,
+      "valid": true
+    },
+    {
+      "id": "forge-migrate-skill",
+      "version": "1.0.0",
+      "description": "Analyze and upgrade legacy SKILL.md, playbooks, or prompts into standardized SkillOps 5-tuple + HASP + Progressive Disclosure skills.",
+      "token_budget_tier": "medium",
+      "authority_profile": "governance_writer",
+      "program_functions": [
+        "pf-skill-contract-guard"
+      ],
+      "line_count": 34,
+      "token_estimate": 363,
+      "valid": true
+    },
+    {
+      "id": "forge-skill",
+      "version": "1.0.0",
+      "description": "Scaffold and validate new skills in SkillOps 5-tuple + HASP + Progressive Disclosure format for project, global, or plugin targets.",
+      "token_budget_tier": "low",
+      "authority_profile": "governance_writer",
+      "program_functions": [
+        "pf-skill-contract-guard"
+      ],
+      "line_count": 36,
+      "token_estimate": 339,
+      "valid": true
+    },
+    {
+      "id": "forge-skillops",
+      "version": "1.0.0",
+      "description": "Build Skill Ecosystem Graph (5 edge types), detect skill technical debt/redundancy, and execute library-time maintenance without extra LLM calls.",
+      "token_budget_tier": "low",
+      "authority_profile": "governance_writer",
+      "program_functions": [
+        "pf-skill-contract-guard"
+      ],
+      "line_count": 34,
+      "token_estimate": 330,
+      "valid": true
+    },
+    {
+      "id": "forge-validate",
+      "version": "1.0.0",
+      "description": "Strictly validate 100% of .memory/ docs, memory.rc.json index sync, and skill SkillOps contracts without LLM calls.",
+      "token_budget_tier": "low",
+      "authority_profile": "read_only",
+      "program_functions": [
+        "pf-rcjson-readonly",
+        "pf-memory-guard",
+        "pf-skill-contract-guard"
+      ],
+      "line_count": 28,
+      "token_estimate": 222,
+      "valid": true
+    }
+  ],
+  "edges": [
+    {
+      "from": "forge-drift",
+      "to": "forge-memory",
+      "type": "depends_on"
+    },
+    {
+      "from": "forge-drift",
+      "to": "forge-migrate-docs",
+      "type": "compatible_with"
+    },
+    {
+      "from": "forge-drift",
+      "to": "forge-validate",
+      "type": "compatible_with"
+    },
+    {
+      "from": "forge-drift",
+      "to": "forge-drift@1.0.0",
+      "type": "lineage"
+    },
+    {
+      "from": "forge-evolve",
+      "to": "forge-skillops",
+      "type": "depends_on"
+    },
+    {
+      "from": "forge-evolve",
+      "to": "forge-memory",
+      "type": "depends_on"
+    },
+    {
+      "from": "forge-evolve",
+      "to": "forge-validate",
+      "type": "compatible_with"
+    },
+    {
+      "from": "forge-evolve",
+      "to": "forge-migrate-skill",
+      "type": "compatible_with"
+    },
+    {
+      "from": "forge-evolve",
+      "to": "forge-evolve@1.0.0",
+      "type": "lineage"
+    },
+    {
+      "from": "forge-memory",
+      "to": "forge-migrate-docs",
+      "type": "compatible_with"
+    },
+    {
+      "from": "forge-memory",
+      "to": "forge-drift",
+      "type": "compatible_with"
+    },
+    {
+      "from": "forge-memory",
+      "to": "forge-validate",
+      "type": "compatible_with"
+    },
+    {
+      "from": "forge-memory",
+      "to": "forge-memory@1.0.0",
+      "type": "lineage"
+    },
+    {
+      "from": "forge-migrate-docs",
+      "to": "forge-memory",
+      "type": "depends_on"
+    },
+    {
+      "from": "forge-migrate-docs",
+      "to": "forge-drift",
+      "type": "compatible_with"
+    },
+    {
+      "from": "forge-migrate-docs",
+      "to": "forge-validate",
+      "type": "compatible_with"
+    },
+    {
+      "from": "forge-migrate-docs",
+      "to": "forge-migrate-docs@1.0.0",
+      "type": "lineage"
+    },
+    {
+      "from": "forge-migrate-skill",
+      "to": "forge-skillops",
+      "type": "compatible_with"
+    },
+    {
+      "from": "forge-migrate-skill",
+      "to": "forge-validate",
+      "type": "compatible_with"
+    },
+    {
+      "from": "forge-migrate-skill",
+      "to": "forge-evolve",
+      "type": "compatible_with"
+    },
+    {
+      "from": "forge-migrate-skill",
+      "to": "forge-skill",
+      "type": "alternative_to"
+    },
+    {
+      "from": "forge-migrate-skill",
+      "to": "forge-migrate-skill@1.0.0",
+      "type": "lineage"
+    },
+    {
+      "from": "forge-skill",
+      "to": "forge-validate",
+      "type": "compatible_with"
+    },
+    {
+      "from": "forge-skill",
+      "to": "forge-skillops",
+      "type": "compatible_with"
+    },
+    {
+      "from": "forge-skill",
+      "to": "forge-migrate-skill",
+      "type": "compatible_with"
+    },
+    {
+      "from": "forge-skill",
+      "to": "forge-migrate-skill",
+      "type": "alternative_to"
+    },
+    {
+      "from": "forge-skill",
+      "to": "forge-skill@1.0.0",
+      "type": "lineage"
+    },
+    {
+      "from": "forge-skillops",
+      "to": "forge-skill",
+      "type": "compatible_with"
+    },
+    {
+      "from": "forge-skillops",
+      "to": "forge-migrate-skill",
+      "type": "compatible_with"
+    },
+    {
+      "from": "forge-skillops",
+      "to": "forge-evolve",
+      "type": "compatible_with"
+    },
+    {
+      "from": "forge-skillops",
+      "to": "forge-skillops@1.0.0",
+      "type": "lineage"
+    },
+    {
+      "from": "forge-validate",
+      "to": "forge-memory",
+      "type": "compatible_with"
+    },
+    {
+      "from": "forge-validate",
+      "to": "forge-drift",
+      "type": "compatible_with"
+    },
+    {
+      "from": "forge-validate",
+      "to": "forge-skillops",
+      "type": "compatible_with"
+    },
+    {
+      "from": "forge-validate",
+      "to": "forge-validate@1.0.0",
+      "type": "lineage"
+    }
+  ],
+  "candidate_redundancies": []
+}

@@ -1,0 +1,37 @@
+{
+  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "name": "team-worktree",
+  "version": "1.0.0",
+  "description": "Provision, inspect, merge (after CLEAN Gate), and prune isolated Git Worktrees for concurrent milestone workers.",
+  "token_budget_tier": "low",
+  "eligibility": {
+    "phases": ["CONTRACT_FROZEN", "DUAL_TRACK", "REMEDIATION", "VICTORY_AUDIT", "MANUAL"],
+    "runtimes": ["DEVIN_CLI_LOCAL", "DEVIN_CLOUD", "ANTIGRAVITY"]
+  },
+  "P_preconditions": [
+    { "type": "command_exit_zero", "command": "git rev-parse --is-inside-work-tree" }
+  ],
+  "O_operation": {
+    "authority_profile": "dispatch_only",
+    "allowed_write_globs": [".agents/teamwork/**"],
+    "denied_shell_patterns": ["git\\s+push\\s+--force"],
+    "program_functions": ["pf-write-boundary"]
+  },
+  "A_artifacts": [
+    { "path": ".agents/teamwork/state.json", "required": true }
+  ],
+  "V_validators": [
+    { "cmd": "node ${PLUGIN_ROOT}/scripts/teamwork-cli.mjs worktree status --workdir ." }
+  ],
+  "F_failure_modes": [
+    { "code": "UNVERIFIED_MERGE", "action": "BLOCK_MERGE", "route_to": "team-gate" },
+    { "code": "MERGE_CONFLICT", "action": "ESCALATE", "route_to": "orchestrator" }
+  ],
+  "ecosystem_edges": {
+    "depends_on": ["team-contract-freeze"],
+    "compatible_with": ["team-run", "team-gate"],
+    "redundant_with": [],
+    "alternative_to": [],
+    "lineage": "team-worktree@1.0.0"
+  }
+}

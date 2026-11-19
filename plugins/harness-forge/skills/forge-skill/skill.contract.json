@@ -1,0 +1,35 @@
+{
+  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "name": "forge-skill",
+  "version": "1.0.0",
+  "description": "Scaffold and validate new skills in SkillOps 5-tuple + HASP + Progressive Disclosure format for project, global, or plugin targets.",
+  "token_budget_tier": "low",
+  "eligibility": {
+    "phases": ["INIT", "SURVEY", "DUAL_TRACK", "DONE", "MANUAL"],
+    "runtimes": ["DEVIN_CLI_LOCAL", "DEVIN_CLOUD", "ANTIGRAVITY"]
+  },
+  "P_preconditions": [],
+  "O_operation": {
+    "authority_profile": "governance_writer",
+    "allowed_write_globs": [".agents/skills/**", "skills/**", "**/skills/**"],
+    "denied_shell_patterns": ["rm\\s+-rf"],
+    "program_functions": ["pf-skill-contract-guard"]
+  },
+  "A_artifacts": [
+    { "path": ".agents/skills/<name>/SKILL.md", "required": true },
+    { "path": ".agents/skills/<name>/skill.contract.json", "required": true }
+  ],
+  "V_validators": [
+    { "cmd": "node ${PLUGIN_ROOT}/scripts/forge-cli.mjs skillops audit --skills-dir .agents/skills --strict" }
+  ],
+  "F_failure_modes": [
+    { "code": "INVALID_SKILL_CONTRACT", "action": "INJECT_CONTEXT", "route_to": "forge:skill-migrator" }
+  ],
+  "ecosystem_edges": {
+    "depends_on": [],
+    "compatible_with": ["forge-validate", "forge-skillops", "forge-migrate-skill"],
+    "redundant_with": [],
+    "alternative_to": ["forge-migrate-skill"],
+    "lineage": "forge-skill@1.0.0"
+  }
+}

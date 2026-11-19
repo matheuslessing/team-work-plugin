@@ -1,0 +1,32 @@
+{
+  "$schema": "https://teamwork-suite.dev/schemas/skill-contract.v1.json",
+  "name": "<skill-name>",
+  "version": "1.0.0",
+  "description": "Concise 1-sentence description matching SKILL.md.",
+  "token_budget_tier": "low",
+  "eligibility": {
+    "phases": ["MANUAL"],
+    "runtimes": ["DEVIN_CLI_LOCAL", "DEVIN_CLOUD", "ANTIGRAVITY"]
+  },
+  "P_preconditions": [],
+  "O_operation": {
+    "authority_profile": "scoped_worker",
+    "allowed_write_globs": [],
+    "denied_shell_patterns": [],
+    "program_functions": []
+  },
+  "A_artifacts": [],
+  "V_validators": [
+    { "cmd": "node --version" }
+  ],
+  "F_failure_modes": [
+    { "code": "VALIDATION_FAILED", "action": "INJECT_CONTEXT", "route_to": "user" }
+  ],
+  "ecosystem_edges": {
+    "depends_on": [],
+    "compatible_with": [],
+    "redundant_with": [],
+    "alternative_to": [],
+    "lineage": "<skill-name>@1.0.0"
+  }
+}

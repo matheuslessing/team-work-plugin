@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://teamwork-suite.dev/schemas/skill-contract.v1.json",
+  "title": "SkillOps Typed Skill Contract (5-Tuple P, O, A, V, F)",
+  "type": "object",
+  "required": [
+    "name",
+    "version",
+    "description",
+    "token_budget_tier",
+    "eligibility",
+    "P_preconditions",
+    "O_operation",
+    "A_artifacts",
+    "V_validators",
+    "F_failure_modes",
+    "ecosystem_edges"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "description": { "type": "string", "minLength": 10 },
+    "token_budget_tier": {
+      "type": "string",
+      "enum": ["low", "medium", "high"]
+    },
+    "eligibility": {
+      "type": "object",
+      "required": ["phases", "runtimes"],
+      "properties": {
+        "phases": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "runtimes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["DEVIN_CLI_LOCAL", "DEVIN_CLOUD", "ANTIGRAVITY"]
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "P_preconditions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type"],
+        "properties": {
+          "type": { "type": "string" },
+          "path": { "type": "string" },
+          "allowed": { "type": "array", "items": { "type": "string" } },
+          "command": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "O_operation": {
+      "type": "object",
+      "required": ["authority_profile", "allowed_write_globs", "denied_shell_patterns", "program_functions"],
+      "properties": {
+        "authority_profile": {
+          "type": "string",
+          "enum": ["read_only", "audit_only", "dispatch_only", "scoped_worker", "test_writer", "governance_writer", "full_orchestrator"]
+        },
+        "allowed_write_globs": { "type": "array", "items": { "type": "string" } },
+        "denied_shell_patterns": { "type": "array", "items": { "type": "string" } },
+        "program_functions": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "A_artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "required"],
+        "properties": {
+          "path": { "type": "string" },
+          "required": { "type": "boolean" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "V_validators": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["cmd"],
+        "properties": {
+          "cmd": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "F_failure_modes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "action", "route_to"],
+        "properties": {
+          "code": { "type": "string" },
+          "action": { "type": "string" },
+          "route_to": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "ecosystem_edges": {
+      "type": "object",
+      "required": ["depends_on", "compatible_with", "redundant_with", "alternative_to", "lineage"],
+      "properties": {
+        "depends_on": { "type": "array", "items": { "type": "string" } },
+        "compatible_with": { "type": "array", "items": { "type": "string" } },
+        "redundant_with": { "type": "array", "items": { "type": "string" } },
+        "alternative_to": { "type": "array", "items": { "type": "string" } },
+        "lineage": { "type": "string" }
+      }
+    }
+  }
+}

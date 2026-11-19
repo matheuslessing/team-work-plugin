@@ -1,0 +1,37 @@
+{
+  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "name": "team-quick",
+  "version": "2.0.0",
+  "description": "Compact pipeline (1 scoped Worker + parallel Reviewer & Forensic Auditor loop) for self-contained bug fixes or features.",
+  "token_budget_tier": "low",
+  "eligibility": {
+    "phases": ["INIT", "DUAL_TRACK", "GATE", "REMEDIATION", "MANUAL"],
+    "runtimes": ["DEVIN_CLI_LOCAL", "DEVIN_CLOUD", "ANTIGRAVITY"]
+  },
+  "P_preconditions": [
+    { "type": "file_exists", "path": ".agents/teamwork/ORIGINAL_REQUEST.md" }
+  ],
+  "O_operation": {
+    "authority_profile": "dispatch_only",
+    "allowed_write_globs": [".agents/teamwork/**"],
+    "denied_shell_patterns": [],
+    "program_functions": ["pf-write-boundary", "pf-anti-cheat-test", "pf-handoff-completeness"]
+  },
+  "A_artifacts": [
+    { "path": ".agents/teamwork/worker_quick_1/handoff.md", "required": true },
+    { "path": ".agents/teamwork/<active_orchestrator>/GATE_STATUS.md", "required": true }
+  ],
+  "V_validators": [
+    { "cmd": "node ${PLUGIN_ROOT}/scripts/teamwork-cli.mjs check-gate --workdir ." }
+  ],
+  "F_failure_modes": [
+    { "code": "REMEDIATION_EXHAUSTED", "action": "TRANSITION_FAILED", "route_to": "user_escalation" }
+  ],
+  "ecosystem_edges": {
+    "depends_on": [],
+    "compatible_with": ["team-gate", "team-audit"],
+    "redundant_with": [],
+    "alternative_to": ["team-run"],
+    "lineage": "team-quick@1.0.0"
+  }
+}

@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://teamwork-suite.dev/schemas/state.v1.json",
+  "title": "Teamwork LTS Execution Harness State Machine",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "phase",
+    "active_orchestrator",
+    "contract_sha256",
+    "milestones",
+    "active_agent_scopes",
+    "budgets",
+    "gate_iterations",
+    "history",
+    "updated_at"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0.0" },
+    "phase": {
+      "type": "string",
+      "enum": [
+        "INIT",
+        "SURVEY",
+        "CONTRACT_FROZEN",
+        "DUAL_TRACK",
+        "GATE",
+        "REMEDIATION",
+        "VICTORY_AUDIT",
+        "DONE",
+        "FAILED"
+      ]
+    },
+    "active_orchestrator": { "type": "string", "pattern": "^orchestrator_\\d+$" },
+    "contract_sha256": { "type": ["string", "null"] },
+    "milestones": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["status", "owned_files"],
+        "properties": {
+          "status": { "type": "string", "enum": ["pending", "in_progress", "completed", "failed"] },
+          "owned_files": { "type": "array", "items": { "type": "string" } },
+          "worktree": { "type": ["string", "null"] },
+          "branch": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "active_agent_scopes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["role", "authority_profile", "allowed_write_globs", "status"],
+        "properties": {
+          "role": { "type": "string" },
+          "authority_profile": {
+            "type": "string",
+            "enum": ["read_only", "audit_only", "dispatch_only", "scoped_worker", "test_writer", "full_orchestrator"]
+          },
+          "allowed_write_globs": { "type": "array", "items": { "type": "string" } },
+          "worktree_path": { "type": ["string", "null"] },
+          "status": { "type": "string", "enum": ["active", "completed", "retired"] }
+        }
+      }
+    },
+    "budgets": {
+      "type": "object",
+      "required": ["max_spawns", "spawns_used", "max_remediations", "remediations_used", "max_turns"],
+      "properties": {
+        "max_spawns": { "type": "integer", "minimum": 1 },
+        "spawns_used": { "type": "integer", "minimum": 0 },
+        "max_remediations": { "type": "integer", "minimum": 1 },
+        "remediations_used": { "type": "integer", "minimum": 0 },
+        "max_turns": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "gate_iterations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["iteration", "result", "timestamp"],
+        "properties": {
+          "iteration": { "type": "integer", "minimum": 1 },
+          "result": { "type": "string", "enum": ["PENDING", "PASS", "FAIL"] },
+          "timestamp": { "type": "string" }
+        }
+      }
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["from", "to", "timestamp"],
+        "properties": {
+          "from": { "type": ["string", "null"] },
+          "to": { "type": "string" },
+          "reason": { "type": "string" },
+          "timestamp": { "type": "string" }
+        }
+      }
+    },
+    "updated_at": { "type": "string" }
+  }
+}

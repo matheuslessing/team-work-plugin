@@ -1,0 +1,37 @@
+{
+  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "name": "team-cloud-workflow",
+  "version": "2.0.0",
+  "description": "Execute deterministic Python workflows (workflow.py) with 30m VM watch_dog, dynamic orchestrator resolution, and Harness2 Propose-Probe-Compose.",
+  "token_budget_tier": "medium",
+  "eligibility": {
+    "phases": ["INIT", "SURVEY", "CONTRACT_FROZEN", "DUAL_TRACK", "GATE", "REMEDIATION", "MANUAL"],
+    "runtimes": ["DEVIN_CLOUD", "ANTIGRAVITY"]
+  },
+  "P_preconditions": [
+    { "type": "command_exit_zero", "command": "python --version" }
+  ],
+  "O_operation": {
+    "authority_profile": "full_orchestrator",
+    "allowed_write_globs": [".agents/teamwork/**"],
+    "denied_shell_patterns": [],
+    "program_functions": ["pf-handoff-completeness", "pf-loop-breaker"]
+  },
+  "A_artifacts": [
+    { "path": ".agents/teamwork/workflow.py", "required": true },
+    { "path": ".agents/teamwork/RUNTIME_ENV.json", "required": true }
+  ],
+  "V_validators": [
+    { "cmd": "python ${PLUGIN_ROOT}/skills/team-cloud-workflow/workflow.py --check" }
+  ],
+  "F_failure_modes": [
+    { "code": "NO_WORKFLOW_RUNNER", "action": "FALLBACK_MANAGED_DEVINS", "route_to": "devin_session_create" }
+  ],
+  "ecosystem_edges": {
+    "depends_on": [],
+    "compatible_with": ["team-run", "team-quick", "team-survey", "team-gate"],
+    "redundant_with": [],
+    "alternative_to": [],
+    "lineage": "team-cloud-workflow@1.0.0"
+  }
+}

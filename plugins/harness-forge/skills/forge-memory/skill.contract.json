@@ -1,0 +1,36 @@
+{
+  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "name": "forge-memory",
+  "version": "1.0.0",
+  "description": "Initialize, query, record ADRs, and manage Project Memory (.memory/ + compiled memory.rc.json) with zero-trust validation.",
+  "token_budget_tier": "low",
+  "eligibility": {
+    "phases": ["INIT", "SURVEY", "VICTORY_AUDIT", "DONE", "MANUAL"],
+    "runtimes": ["DEVIN_CLI_LOCAL", "DEVIN_CLOUD", "ANTIGRAVITY"]
+  },
+  "P_preconditions": [],
+  "O_operation": {
+    "authority_profile": "governance_writer",
+    "allowed_write_globs": [".memory/**/*.md", ".gitignore"],
+    "denied_shell_patterns": [],
+    "program_functions": ["pf-rcjson-readonly", "pf-memory-guard"]
+  },
+  "A_artifacts": [
+    { "path": ".memory/memory.rc.json", "required": true },
+    { "path": ".memory/MEMORY.md", "required": true }
+  ],
+  "V_validators": [
+    { "cmd": "node ${PLUGIN_ROOT}/scripts/forge-cli.mjs validate --workdir . --strict" }
+  ],
+  "F_failure_modes": [
+    { "code": "MISSING_SOURCE_REF", "action": "BLOCK_UPSERT", "route_to": "forge:memory-curator" },
+    { "code": "RCJSON_MANUAL_EDIT", "action": "BLOCK_TOOL", "route_to": "memory_rebuild" }
+  ],
+  "ecosystem_edges": {
+    "depends_on": [],
+    "compatible_with": ["forge-migrate-docs", "forge-drift", "forge-validate"],
+    "redundant_with": [],
+    "alternative_to": [],
+    "lineage": "forge-memory@1.0.0"
+  }
+}

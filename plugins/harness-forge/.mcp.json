@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "harness-forge-memory": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "${PLUGIN_ROOT}/mcp-server/server.mjs"
+      ],
+      "env": {
+        "FORGE_MCP_MODE": "full"
+      }
+    }
+  }
+}

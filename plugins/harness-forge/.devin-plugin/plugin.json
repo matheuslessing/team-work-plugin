@@ -1,0 +1,22 @@
+{
+  "name": "harness-forge",
+  "version": "2.0.0",
+  "description": "SkillOps, HASP Program Functions & PMSP Project Memory factory + embedded stdio MCP server: author/migrate skills to typed 5-tuple contracts, standardize legacy docs into .memory/ with compiled memory.rc.json, detect code-doc drift, and run Harness² + Skill-Use evals.",
+  "author": {
+    "name": "Matheus Lessing"
+  },
+  "homepage": "https://github.com/matheuslessing/team-work-plugin",
+  "repository": "https://github.com/matheuslessing/team-work-plugin.git",
+  "license": "MIT",
+  "keywords": [
+    "skillops",
+    "hasp",
+    "project-memory",
+    "rcjson",
+    "mcp",
+    "harness-engineering",
+    "skill-use",
+    "harness2"
+  ],
+  "skills": "skills"
+}

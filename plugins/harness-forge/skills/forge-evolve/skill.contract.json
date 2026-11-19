@@ -1,0 +1,34 @@
+{
+  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "name": "forge-evolve",
+  "version": "1.0.0",
+  "description": "Run Harness2 cross-task recursion and Voyager promotion: extract verified lessons into .memory/, propose HASP PFs, and gate with Skill-Use evals.",
+  "token_budget_tier": "medium",
+  "eligibility": {
+    "phases": ["VICTORY_AUDIT", "DONE", "MANUAL"],
+    "runtimes": ["DEVIN_CLI_LOCAL", "DEVIN_CLOUD", "ANTIGRAVITY"]
+  },
+  "P_preconditions": [],
+  "O_operation": {
+    "authority_profile": "governance_writer",
+    "allowed_write_globs": [".memory/**", ".agents/skills/**", "programs/**"],
+    "denied_shell_patterns": ["git\\s+push\\s+--force"],
+    "program_functions": ["pf-memory-guard", "pf-skill-contract-guard"]
+  },
+  "A_artifacts": [
+    { "path": ".memory/memory.rc.json", "required": true }
+  ],
+  "V_validators": [
+    { "cmd": "node ${PLUGIN_ROOT}/scripts/forge-cli.mjs eval-skills --suite tests/evals/skill-use --min-score 0.90" }
+  ],
+  "F_failure_modes": [
+    { "code": "SKILL_USE_REGRESSION", "action": "REJECT_EVOLUTION", "route_to": "forge:harness-evolver" }
+  ],
+  "ecosystem_edges": {
+    "depends_on": ["forge-skillops", "forge-memory"],
+    "compatible_with": ["forge-validate", "forge-migrate-skill"],
+    "redundant_with": [],
+    "alternative_to": [],
+    "lineage": "forge-evolve@1.0.0"
+  }
+}

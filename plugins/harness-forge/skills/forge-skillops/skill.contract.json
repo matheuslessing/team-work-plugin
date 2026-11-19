@@ -1,0 +1,35 @@
+{
+  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "name": "forge-skillops",
+  "version": "1.0.0",
+  "description": "Build Skill Ecosystem Graph (5 edge types), detect skill technical debt/redundancy, and execute library-time maintenance without extra LLM calls.",
+  "token_budget_tier": "low",
+  "eligibility": {
+    "phases": ["INIT", "DONE", "MANUAL"],
+    "runtimes": ["DEVIN_CLI_LOCAL", "DEVIN_CLOUD", "ANTIGRAVITY"]
+  },
+  "P_preconditions": [],
+  "O_operation": {
+    "authority_profile": "governance_writer",
+    "allowed_write_globs": ["skills/ecosystem-graph.json", ".agents/skills/ecosystem-graph.json"],
+    "denied_shell_patterns": [],
+    "program_functions": ["pf-skill-contract-guard"]
+  },
+  "A_artifacts": [
+    { "path": "skills/ecosystem-graph.json", "required": true }
+  ],
+  "V_validators": [
+    { "cmd": "node ${PLUGIN_ROOT}/scripts/forge-cli.mjs skillops audit --skills-dir .agents/skills --strict" }
+  ],
+  "F_failure_modes": [
+    { "code": "SKILL_REDUNDANCY", "action": "RECOMMEND_MERGE", "route_to": "forge:skill-migrator" },
+    { "code": "BROKEN_EDGE", "action": "RECOMMEND_REPAIR", "route_to": "forge:skill-migrator" }
+  ],
+  "ecosystem_edges": {
+    "depends_on": [],
+    "compatible_with": ["forge-skill", "forge-migrate-skill", "forge-evolve"],
+    "redundant_with": [],
+    "alternative_to": [],
+    "lineage": "forge-skillops@1.0.0"
+  }
+}
