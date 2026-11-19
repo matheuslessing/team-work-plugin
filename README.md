@@ -16,9 +16,9 @@ flowchart TD
     Core -. "scripts/sync-core.mjs" .-> P2
 
     subgraph TargetRepo["Any Target Repository (Never Pollutes Plugin Repo)"]
-        Mem[".memory/<br/>├── memory.rc.json (Compiled)<br/>├── MEMORY.md (<=120 lines)<br/>├── architecture/, decisions/, contracts/, gotchas/<br/>└── .cache/ (SQLite FTS5 + BM25)"]
-        Skills[".agents/skills/<name>/<br/>├── SKILL.md<br/>└── skill.contract.json (P,O,A,V,F)"]
-        Work[".agents/teamwork/<br/>├── state.json (LTS Machine)<br/>├── board.jsonl (#seq channels)<br/>├── view.json (Threads & Attention)<br/>└── skill-bom.json (Runtime BOM)"]
+        Mem[".memory/ (memory.rc.json + MEMORY.md + architecture, decisions, contracts, gotchas + .cache)"]
+        Skills[".agents/skills/<name>/ (SKILL.md + skill.contract.json P,O,A,V,F)"]
+        Work[".agents/teamwork/ (state.json + board.jsonl + view.json + skill-bom.json)"]
     end
 
     P2 -- "/forge-migrate-docs, MCP, HASP Hooks" --> Mem
@@ -50,6 +50,130 @@ team-plugin/
 │       ├── templates/                 # Templates for SKILL.md, contracts, .pf.mjs, ADRs, architecture, contracts, gotchas
 │       └── adapters/antigravity/      # Dual-target Antigravity manifest, mcp_config & hooks
 └── tests/                             # 5-phase unit/E2E tests + evals/skill-use/ benchmark
+```
+
+---
+
+## Execution & Governance Flowcharts
+
+### 1. Feature Development Flow with `teamwork`
+
+```mermaid
+flowchart TD
+    User["User: /team-craft (feature idea)"] --> Craft["9-Step Prompt Crafting (prompt_draft.md)"]
+    Craft --> Router{"Complexity Router"}
+
+    Router -- "Tier S: trivial 1-file fix" --> Solo["Direct implementation + standard tests"]
+    Router -- "Tier M: contained fix/feature" --> Quick["/team-quick (1 Worker + Reviewer + Forensic Auditor)"]
+    Router -- "Tier L: multi-module" --> Init["Approval -> ORIGINAL_REQUEST.md + teamwork-cli init (state.json, view.json)"]
+
+    subgraph Phase0["Phase 0: Survey and Contract Freeze"]
+        Init --> MemRead["Query .memory/memory.rc.json and memory drift"]
+        MemRead --> Explorers["2-3 Parallel Explorers (read_only, edit tool disabled)"]
+        Explorers --> ProjectMd["Orchestrator synthesizes PROJECT.md (contracts + disjoint ownership)"]
+        ProjectMd --> Freeze["/team-contract-freeze (SHA-256 in state.json -> CONTRACT_FROZEN)"]
+    end
+
+    subgraph Phase1["Phase 1: Isolated Dual-Track + Real-Time HASP"]
+        Freeze --> TrackA["Track A: test-writer (4-Tier E2E + dynamic runner)"]
+        Freeze --> TrackB["Track B: workers M1..Mn in isolated Git Worktrees (--worktree)"]
+        TrackA <--> Board["Swarm Board (board.jsonl #seq channels + stall-monitor)"]
+        TrackB <--> Board
+        TrackA -. "PreToolUse / PostToolUse" .-> HaspExec["HASP Guards: pf-write-boundary, pf-anti-cheat-test, pf-facade-runner, pf-loop-breaker"]
+        TrackB -. "PreToolUse / PostToolUse" .-> HaspExec
+    end
+
+    subgraph Phase2["Phase 2 & 3: Adversarial & Forensic Gate + Remediation"]
+        TrackA --> Gate["/team-gate: Reviewer + Challenger + Forensic Auditor (parallel)"]
+        TrackB --> Gate
+        Gate --> GateDec{"All APPROVE + Forensic CLEAN?"}
+        GateDec -- "Fail 1st time" --> Rem1["Log DEAD_ENDS.md + worker_remediation_1"]
+        Rem1 --> Gate
+        GateDec -- "Fail 2nd time" --> PPC["Harness2 Propose-Probe-Compose (k=2 worktrees + probe + contrastive synthesis)"]
+        PPC --> Gate
+        GateDec -- "3 iterations exhausted" --> Escalate["Status FAILED: block Victory Audit and escalate to user"]
+    end
+
+    subgraph Phase4["Phase 4: Merge, Victory Audit & Memory Promotion"]
+        GateDec -- "PASS (CLEAN)" --> Merge["/team-worktree merge (only allowed on Gate PASS)"]
+        Merge --> Victory["Sentinel spawns victory-auditor (audit_only)"]
+        Victory --> VicDec{"Victory CLEAN?"}
+        VicDec -- "REJECT" --> Rem1
+        VicDec -- "CLEAN" --> Done["state.json = DONE + memory promote (DEAD_ENDS -> .memory/gotchas/)"]
+    end
+```
+
+### 2. `harness-forge` Flow (Skills, Docs/Memory & 4 Enforcement Barriers)
+
+```mermaid
+flowchart TD
+    Start["User opens any target repository"] --> Choice{"Which harness-forge workflow?"}
+
+    subgraph TrilhaA["Track A: Skill Factory & Legacy Migration (SkillOps + HASP)"]
+        Choice -- "New skill" --> ForgeSkill["/forge-skill --scope project|global|plugin"]
+        Choice -- "Legacy skill or playbook" --> MigSkill["/forge-migrate-skill -> analyze-legacy"]
+        ForgeSkill --> SkillWriter["forge:skill-migrator writes SKILL.md (<=220 lines) + skill.contract.json (P,O,A,V,F) + .pf.mjs"]
+        MigSkill --> SkillWriter
+        SkillWriter --> SkillGuard["HASP PostToolUse: pf-skill-contract-guard"]
+        SkillGuard --> SkillOps["/forge-skillops: builds ecosystem-graph.json + audit --strict (zero LLM)"]
+    end
+
+    subgraph TrilhaB["Track B: Docs Standardization & PMSP Memory (4 Barriers)"]
+        Choice -- "Legacy docs / README / Repo" --> MigDocs["/forge-memory init + /forge-migrate-docs"]
+        MigDocs --> DocAgent["forge:doc-standardizer classifies into architecture, decisions, contracts, gotchas"]
+        DocAgent --> WritePath{"Write path"}
+        WritePath -- "Via embedded MCP" --> B1["Barrier 1: MCP memory_upsert / memory_record_adr"]
+        WritePath -- "Via edit/write_file (e.g. company rcjson MCP)" --> B2["Barrier 2: HASP pf-rcjson-readonly blocks rcjson + pf-memory-guard checks .md"]
+        B1 --> Val{"Single Validator (schema + source_refs exist on disk?)"}
+        B2 --> Val
+        Val -- "Invalid" --> Reject["REJECT / BLOCK with exact line-by-line errors"]
+        Val -- "Valid" --> Compile["Compute sha256 + sections + atomic .md write + compile memory.rc.json, MEMORY.md & SQLite/BM25"]
+        Compile --> B3["Barrier 3: Blocking Stop hook + Git pre-commit (install-git-hook)"]
+        B3 --> B4["Barrier 4: /forge-drift detects modified code and marks stale: true"]
+    end
+
+    subgraph TrilhaC["Track C: Governed Evolution (Harness2 + Voyager)"]
+        Choice -- "Post-mission evolution" --> Evolve["/forge-evolve reads DEAD_ENDS.md, skill-bom.json & telemetry"]
+        Evolve --> Evolver["forge:harness-evolver proposes PF or .memory/skills-learned/ on isolated branch"]
+        Evolver --> EvalGate{"SkillOps audit --strict + eval-skills (SU >= 0.90)?"}
+        EvalGate -- "Regression" --> Drop["Reject change (never merged to main)"]
+        EvalGate -- "Approved" --> Promote["Promote verified skill (Voyager criterion)"]
+    end
+```
+
+### 3. Integrated Sequence (`teamwork` + `harness-forge` During a Feature)
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant TW as teamwork (Executor)
+    participant HASP as HASP Hooks (Pre/Post/Stop)
+    participant HF as harness-forge (MCP / CLI)
+    participant Repo as Target Repo (.memory/ and src/)
+
+    U->>HF: (1x in project) /forge-migrate-docs
+    HF->>Repo: Verify source_refs + write .memory/*.md + compile memory.rc.json
+
+    U->>TW: /team-craft + /team-run (new feature)
+    TW->>HF: Phase 0: memory_index + memory_drift
+    HF->>Repo: Check SHA-256 of source_refs against disk
+    HF-->>TW: Return lean index + stale flags (if code drifted)
+
+    TW->>TW: Phase 0.5: /team-contract-freeze (hash PROJECT.md in state.json)
+    TW->>Repo: Phase 1: Track A (tests) + Track B (workers in Git Worktrees)
+
+    loop On every edit or shell command
+        TW->>HASP: PreToolUse / PostToolUse
+        HASP-->>TW: Block scope escapes, manual memory.rc.json edits, mock tests, or error loops
+    end
+
+    TW->>TW: Phase 2/3: Gate (Reviewer + Challenger + Forensic) + Propose-Probe-Compose
+    TW->>TW: Phase 4: worktree merge + victory-auditor = CLEAN
+
+    TW->>HF: Post-Victory: memory promote + /forge-evolve
+    HF->>Repo: Promote verified DEAD_ENDS -> .memory/gotchas/ and recompile memory.rc.json
+    HF->>HF: Run skillops audit --strict + eval-skills (Skill-Use)
+    TW-->>U: Final verified delivery with updated memory and skills
 ```
 
 ---
