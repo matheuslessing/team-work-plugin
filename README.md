@@ -112,7 +112,7 @@ flowchart TD
     subgraph TrilhaA["Track A: Skill Factory & Legacy Migration (SkillOps + HASP)"]
         Choice -- "New skill" --> ForgeSkill["/forge-skill --scope project|global|plugin"]
         Choice -- "Legacy skill or playbook" --> MigSkill["/forge-migrate-skill -> analyze-legacy"]
-        ForgeSkill --> SkillWriter["forge:skill-migrator writes SKILL.md (<=220 lines) + skill.contract.json (P,O,A,V,F) + .pf.mjs"]
+        ForgeSkill --> SkillWriter["harness-forge:skill-migrator writes SKILL.md (<=220 lines) + skill.contract.json (P,O,A,V,F) + .pf.mjs"]
         MigSkill --> SkillWriter
         SkillWriter --> SkillGuard["HASP PostToolUse: pf-skill-contract-guard"]
         SkillGuard --> SkillOps["/forge-skillops: builds ecosystem-graph.json + audit --strict (zero LLM)"]
@@ -120,21 +120,21 @@ flowchart TD
 
     subgraph TrilhaB["Track B: Docs Standardization & PMSP Memory (4 Barriers)"]
         Choice -- "Legacy docs / README / Repo" --> MigDocs["/forge-memory init + /forge-migrate-docs"]
-        MigDocs --> DocAgent["forge:doc-standardizer classifies into architecture, decisions, contracts, gotchas"]
+        MigDocs --> DocAgent["harness-forge:doc-standardizer classifies into architecture, decisions, contracts, gotchas"]
         DocAgent --> WritePath{"Write path"}
         WritePath -- "Via embedded MCP" --> B1["Barrier 1: MCP memory_upsert / memory_record_adr"]
         WritePath -- "Via edit/write_file (e.g. company rcjson MCP)" --> B2["Barrier 2: HASP pf-rcjson-readonly blocks rcjson + pf-memory-guard checks .md"]
         B1 --> Val{"Single Validator (schema + source_refs exist on disk?)"}
         B2 --> Val
         Val -- "Invalid" --> Reject["REJECT / BLOCK with exact line-by-line errors"]
-        Val -- "Valid" --> Compile["Compute sha256 + sections + atomic .md write + compile memory.rc.json, MEMORY.md & SQLite/BM25"]
+        Val -- "Valid" --> Compile["Compute sha256 + sections + atomic .md write + compile memory.rc.json, MEMORY.md & BM25"]
         Compile --> B3["Barrier 3: Blocking Stop hook + Git pre-commit (install-git-hook)"]
         B3 --> B4["Barrier 4: /forge-drift detects modified code and marks stale: true"]
     end
 
     subgraph TrilhaC["Track C: Governed Evolution (Harness2 + Voyager)"]
         Choice -- "Post-mission evolution" --> Evolve["/forge-evolve reads DEAD_ENDS.md, skill-bom.json & telemetry"]
-        Evolve --> Evolver["forge:harness-evolver proposes PF or .memory/skills-learned/ on isolated branch"]
+        Evolve --> Evolver["harness-forge:harness-evolver proposes PF or .memory/skills-learned/ on isolated branch"]
         Evolver --> EvalGate{"SkillOps audit --strict + eval-skills (SU >= 0.90)?"}
         EvalGate -- "Regression" --> Drop["Reject change (never merged to main)"]
         EvalGate -- "Approved" --> Promote["Promote verified skill (Voyager criterion)"]
@@ -314,7 +314,7 @@ Open any existing project repository and run:
 | :--- | :--- |
 | `/forge-skill` | Smart deterministic skill triage (`skill triage`) + scaffold/validate skills (`SKILL.md` + `skill.contract.json`) in `project`, `global`, or `plugin` scope. |
 | `/forge-migrate-skill` | Analyze & upgrade any legacy `SKILL.md` or playbook to SkillOps 5-tuple + HASP + Progressive Disclosure. |
-| `/forge-memory` | Initialize `.memory/`, search (`BM25` / `SQLite FTS5`), read sections surgically, record ADRs, and promote gotchas. |
+| `/forge-memory` | Initialize `.memory/`, search (`BM25`), read sections surgically, record ADRs, and promote gotchas. |
 | `/forge-migrate-docs` | Standardize existing `docs/`/`README.md` or map codebases into `.memory/` with disk-verified `source_refs`. |
 | `/forge-validate` | Zero-LLM strict compliance validator for `.memory/`, `memory.rc.json` sync, and SkillOps contracts. |
 | `/forge-drift` | Compute SHA-256 & symbol drift across `source_refs` and mark/cure `stale` entries. |
@@ -340,8 +340,8 @@ Configured in `plugins/harness-forge/.mcp.json` (Devin) or `adapters/antigravity
 
 | Mode (`FORGE_MCP_MODE`) | Exposed Tools | When to Use |
 | :--- | :--- | :--- |
-| **`full`** *(default)* | All 13 tools: `memory_index`, `memory_search`, `memory_read`, `memory_drift`, `memory_upsert`, `memory_record_adr`, `memory_retire`, `memory_rebuild_index`, `skill_index`, `skill_graph`, `skill_triage`, `skill_validate`, `skill_scaffold` | Standalone / personal / new projects using our embedded MCP for both read and write. |
-| **`validator-only`** | 7 governance/write tools (`memory_drift`, `memory_upsert`, `memory_record_adr`, `memory_retire`, `memory_rebuild_index`, `skill_validate`, `skill_scaffold`) | **Enterprise coexistence**: pair with your company's existing read-only `rcjson` MCP (`memory.rc.json` + `.md` layout stays 100% compatible and protected by Barriers 2–4). |
+| **`full`** *(default)* | All 14 tools: `memory_index`, `memory_search`, `memory_read`, `memory_drift`, `memory_upsert`, `memory_record_adr`, `memory_retire`, `memory_rebuild_index`, `memory_promote`, `skill_index`, `skill_graph`, `skill_triage`, `skill_validate`, `skill_scaffold` | Standalone / personal / new projects using our embedded MCP for both read and write. |
+| **`validator-only`** | 8 governance/write tools (`memory_drift`, `memory_upsert`, `memory_record_adr`, `memory_retire`, `memory_rebuild_index`, `memory_promote`, `skill_validate`, `skill_scaffold`) | **Enterprise coexistence**: pair with your company's existing read-only `rcjson` MCP (`memory.rc.json` + `.md` layout stays 100% compatible and protected by Barriers 2–4). |
 
 ```json
 {

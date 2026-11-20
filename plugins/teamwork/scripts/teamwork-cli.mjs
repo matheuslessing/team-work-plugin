@@ -22,10 +22,12 @@ import { detectStalls } from './lib/stall-monitor.mjs';
 import {
   checkBudget,
   createInitialState,
+  evaluateLatestGate,
   freezeContract,
   getActiveOrchestrator,
   getTeamworkRoot,
   loadState,
+  recordGateIteration,
   registerAgentScope,
   saveState,
   setOrchestratorGeneration,
@@ -37,16 +39,69 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const pluginRoot = path.resolve(__dirname, '..');
 
-const args = process.argv.slice(2);
-const command = args[0] || 'status';
+const BOOLEAN_FLAGS = new Set([
+  '--no-write',
+  '--copy-root-workflow',
+  '--provision-workflow',
+  '--start-watchdog',
+  '--worktree',
+  '--force',
+  '--require-verdict',
+  '--check-files',
+  '--tests-only',
+  '--json',
+  '--strict',
+  '--skip-gate',
+  '--delete-branch',
+  '--help',
+  '-h'
+]);
+
+function parseCli(argv) {
+  const positionals = [];
+  const flags = new Map();
+  const seenBool = new Set();
+
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '-h') {
+      seenBool.add('-h');
+      continue;
+    }
+    if (a.startsWith('--')) {
+      const eq = a.indexOf('=');
+      if (eq !== -1) {
+        const k = a.slice(0, eq);
+        const v = a.slice(eq + 1);
+        if (BOOLEAN_FLAGS.has(k)) {
+          if (v !== 'false' && v !== '0') seenBool.add(k);
+        } else {
+          flags.set(k, v);
+        }
+      } else if (BOOLEAN_FLAGS.has(a)) {
+        seenBool.add(a);
+      } else if (i + 1 < argv.length && !argv[i + 1].startsWith('--')) {
+        flags.set(a, argv[i + 1]);
+        i += 1;
+      } else {
+        seenBool.add(a);
+      }
+    } else {
+      positionals.push(a);
+    }
+  }
+  return { positionals, flags, seenBool };
+}
+
+const cli = parseCli(process.argv.slice(2));
+const command = cli.positionals[0] || 'status';
 
 function getFlag(name, defaultValue = '') {
-  const idx = args.indexOf(name);
-  return idx !== -1 && idx + 1 < args.length ? args[idx + 1] : defaultValue;
+  return cli.flags.has(name) ? cli.flags.get(name) : defaultValue;
 }
 
 function hasFlag(name) {
-  return args.includes(name);
+  return cli.seenBool.has(name);
 }
 
 const workdir = path.resolve(getFlag('--workdir', process.env.DEVIN_PROJECT_DIR || process.cwd()));
@@ -143,9 +198,11 @@ function cmdInit() {
 }
 
 function cmdWatchdog() {
-  const sub = args[1] || 'status';
-  const windowMin = Number(getFlag('--window-min', '30')) || 30;
-  const intervalMin = Number(getFlag('--interval-min', '10')) || 10;
+  const sub = cli.positionals[1] || 'status';
+  const rawWindow = Number(getFlag('--window-min', '30'));
+  const rawInterval = Number(getFlag('--interval-min', '10'));
+  const windowMin = Number.isFinite(rawWindow) && rawWindow > 0 ? rawWindow : 30;
+  const intervalMin = Number.isFinite(rawInterval) && rawInterval > 0 ? rawInterval : 10;
 
   if (sub === 'start') {
     startWatchdogDaemon(workdir, __filename, windowMin, intervalMin, false);
@@ -165,13 +222,20 @@ function cmdWatchdog() {
         clearInterval(timer);
         process.exit(0);
       }
+      const state = loadState(workdir);
+      if (state.phase === 'DONE' || state.phase === 'FAILED') {
+        runWatchdogPulse(workdir, windowMin, intervalMin);
+        stopWatchdogDaemon(workdir, true);
+        clearInterval(timer);
+        process.exit(0);
+      }
       const activeOrch = getActiveOrchestrator(workdir);
       const sentinelHandoff = path.join(teamworkRoot, 'sentinel', 'handoff.md');
       const gateStatus = path.join(teamworkRoot, activeOrch.id, 'GATE_STATUS.md');
       if (
         fs.existsSync(sentinelHandoff) &&
         fs.existsSync(gateStatus) &&
-        /Gate Result:\s*\*\*PASS\*\*/i.test(fs.readFileSync(gateStatus, 'utf8'))
+        evaluateLatestGate(fs.readFileSync(gateStatus, 'utf8')).passed
       ) {
         runWatchdogPulse(workdir, windowMin, intervalMin);
         stopWatchdogDaemon(workdir, true);
@@ -187,17 +251,21 @@ function cmdWatchdog() {
 }
 
 function cmdSpawn() {
-  const agentId = args[1];
-  const archetype = args[2] || 'worker';
+  const agentId = cli.positionals[1];
+  const archetype = cli.positionals[2] || 'worker';
   const milestone = getFlag('--milestone', 'TBD');
   const useWorktree = hasFlag('--worktree');
   const ownRaw = getFlag('--own', '');
-  const ownGlobs = ownRaw ? ownRaw.split(',').map((s) => s.trim()).filter(Boolean) : [];
+  let ownGlobs = ownRaw ? ownRaw.split(',').map((s) => s.trim()).filter(Boolean) : [];
   const envInfo = detectEnvironment(workdir);
 
   if (!agentId) {
     console.error('Usage: teamwork-cli.mjs spawn <agent_id> <archetype> [--milestone <m>] [--own glob1,glob2] [--worktree]');
     process.exit(1);
+  }
+  if (!/^[a-zA-Z0-9_-]+$/.test(agentId)) {
+    console.error(`FAIL: Invalid agent_id "${agentId}". Must match ^[a-zA-Z0-9_-]+$.`);
+    process.exit(2);
   }
 
   const budget = checkBudget(workdir);
@@ -219,6 +287,9 @@ function cmdSpawn() {
   }
 
   const authorityProfile = archetypeToAuthority(archetype);
+  if (authorityProfile === 'test_writer' && ownGlobs.length === 0) {
+    ownGlobs = ['TEST_INFRA.md', 'TEST_READY.md', 'tests/**', '*test*', 'run[-_]tests*'];
+  }
   registerAgentScope(workdir, {
     agentId,
     role: archetype,
@@ -245,7 +316,7 @@ function cmdSpawn() {
 }
 
 function cmdValidateHandoff() {
-  const target = args[1];
+  const target = cli.positionals[1];
   if (!target) {
     console.error('Usage: teamwork-cli.mjs validate-handoff <path> [--require-verdict] [--check-files]');
     process.exit(1);
@@ -298,13 +369,8 @@ function cmdCheckGate() {
     console.error(`FAIL: GATE_STATUS.md not found at ${gatePath}`);
     process.exit(2);
   }
-  const content = fs.readFileSync(gatePath, 'utf8');
-  const latest = content.split(/^##\s+Gate/im).pop() || '';
-  const hasViolation = /INTEGRITY[_\s]VIOLATION/i.test(latest);
-  const hasRequestChanges = /REQUEST_CHANGES/i.test(latest);
-  const hasClean = /\bCLEAN\b/i.test(latest);
-
-  if (hasViolation || hasRequestChanges || !hasClean) {
+  const gateEval = evaluateLatestGate(fs.readFileSync(gatePath, 'utf8'));
+  if (!gateEval.passed) {
     console.error(`🔴 GATE STATUS (${activeOrch.id}): FAIL`);
     process.exit(2);
   }
@@ -377,9 +443,13 @@ function cmdSucceedOrchestrator() {
 }
 
 function cmdState() {
-  const sub = args[1] || 'show';
+  const sub = cli.positionals[1] || 'show';
   if (sub === 'transition') {
-    const to = args[2];
+    const to = cli.positionals[2];
+    if (!to) {
+      console.error('Usage: teamwork-cli.mjs state transition <PHASE> [--reason <text>] [--force]');
+      process.exit(1);
+    }
     const reason = getFlag('--reason', '');
     const st = transitionPhase(workdir, to, { reason, force: hasFlag('--force') });
     buildAndWriteView(workdir);
@@ -388,29 +458,40 @@ function cmdState() {
     const res = freezeContract(workdir);
     buildAndWriteView(workdir);
     console.log(JSON.stringify(res, null, 2));
+  } else if (sub === 'gate-record') {
+    const iteration = Number(getFlag('--iteration', cli.positionals[2] || ''));
+    const result = String(getFlag('--result', cli.positionals[3] || '')).toUpperCase();
+    if (!Number.isInteger(iteration) || iteration < 1 || (result !== 'PASS' && result !== 'FAIL')) {
+      console.error('Usage: teamwork-cli.mjs state gate-record --iteration <n>=1.. --result PASS|FAIL');
+      process.exit(1);
+    }
+    const st = recordGateIteration(workdir, { iteration, result });
+    buildAndWriteView(workdir);
+    console.log(JSON.stringify({ iteration, result, gate_iterations: st.gate_iterations }, null, 2));
   } else {
     console.log(JSON.stringify(loadState(workdir), null, 2));
   }
 }
 
 function cmdBoard() {
-  const sub = args[1] || 'read';
+  const sub = cli.positionals[1] || 'read';
   if (sub === 'post') {
     const entry = postMessage(workdir, {
       from: getFlag('--from', 'coordinator'),
       channel: getFlag('--channel', 'main'),
-      text: getFlag('--text', args.slice(2).join(' '))
+      text: getFlag('--text', cli.positionals.slice(2).join(' '))
     });
     buildAndWriteView(workdir);
     console.log(JSON.stringify(entry, null, 2));
   } else if (sub === 'channel-create') {
-    const ch = createChannel(workdir, args[2], getFlag('--topic', ''));
+    const ch = createChannel(workdir, cli.positionals[2], getFlag('--topic', ''));
     console.log(JSON.stringify(ch, null, 2));
   } else if (sub === 'status') {
     console.log(JSON.stringify(getBoardStatus(workdir), null, 2));
   } else {
+    const rawSince = Number(getFlag('--since', '0'));
     const entries = readBoard(workdir, {
-      since: Number(getFlag('--since', '0')),
+      since: Number.isFinite(rawSince) ? rawSince : 0,
       channel: getFlag('--channel', null) || null,
       reader: getFlag('--reader', '') || null
     });
@@ -419,15 +500,15 @@ function cmdBoard() {
 }
 
 function cmdWorktree() {
-  const sub = args[1] || 'status';
+  const sub = cli.positionals[1] || 'status';
   if (sub === 'create') {
-    console.log(JSON.stringify(createWorktree(workdir, args[2]), null, 2));
+    console.log(JSON.stringify(createWorktree(workdir, cli.positionals[2]), null, 2));
   } else if (sub === 'diff') {
-    console.log(JSON.stringify(worktreeDiff(workdir, args[2]), null, 2));
+    console.log(JSON.stringify(worktreeDiff(workdir, cli.positionals[2]), null, 2));
   } else if (sub === 'merge') {
-    console.log(JSON.stringify(mergeWorktree(workdir, args[2], { requireGate: !hasFlag('--skip-gate') }), null, 2));
+    console.log(JSON.stringify(mergeWorktree(workdir, cli.positionals[2], { requireGate: !hasFlag('--skip-gate') }), null, 2));
   } else if (sub === 'prune') {
-    console.log(JSON.stringify(pruneWorktree(workdir, args[2], { deleteBranch: hasFlag('--delete-branch') }), null, 2));
+    console.log(JSON.stringify(pruneWorktree(workdir, cli.positionals[2], { deleteBranch: hasFlag('--delete-branch') }), null, 2));
   } else {
     console.log(JSON.stringify(worktreeStatus(workdir), null, 2));
   }
@@ -492,9 +573,12 @@ try {
     case 'board':
       cmdBoard();
       break;
-    case 'stall-check':
-      console.log(JSON.stringify(detectStalls(workdir, { staleMinutes: Number(getFlag('--stale-min', '10')) }), null, 2));
+    case 'stall-check': {
+      const rawStale = Number(getFlag('--stale-min', '10'));
+      const staleMinutes = Number.isFinite(rawStale) && rawStale >= 0 ? rawStale : 10;
+      console.log(JSON.stringify(detectStalls(workdir, { staleMinutes }), null, 2));
       break;
+    }
     case 'view':
       console.log(JSON.stringify(buildAndWriteView(workdir).view, null, 2));
       break;
@@ -502,9 +586,18 @@ try {
       cmdWorktree();
       break;
     case 'status':
-    default:
+      if (hasFlag('--help') || hasFlag('-h')) {
+        console.log('Usage: teamwork-cli.mjs <detect-env|init|watchdog|check-heartbeat|succeed-orchestrator|spawn|validate-handoff|scan-integrity|check-gate|state|board|stall-check|view|worktree|status> [options]');
+        break;
+      }
       cmdStatus();
       break;
+    case 'help':
+      console.log('Usage: teamwork-cli.mjs <detect-env|init|watchdog|check-heartbeat|succeed-orchestrator|spawn|validate-handoff|scan-integrity|check-gate|state|board|stall-check|view|worktree|status> [options]');
+      break;
+    default:
+      console.error(`Unknown command: ${command}`);
+      process.exit(2);
   }
 } catch (err) {
   console.error(`FAIL: ${err.message}`);

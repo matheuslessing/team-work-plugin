@@ -43,7 +43,8 @@ function loadBoardMeta(workdir) {
 function saveBoardMeta(workdir, meta) {
   const metaPath = getBoardMetaPath(workdir);
   fs.mkdirSync(path.dirname(metaPath), { recursive: true });
-  const tmp = `${metaPath}.${process.pid}.tmp`;
+  const rand = Math.random().toString(36).slice(2, 8);
+  const tmp = `${metaPath}.${process.pid}.${Date.now()}.${rand}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(meta, null, 2), 'utf8');
   fs.renameSync(tmp, metaPath);
 }
@@ -51,7 +52,7 @@ function saveBoardMeta(workdir, meta) {
 export function parseMentions(text) {
   const mentions = new Set();
   const channelMentions = new Set();
-  for (const m of String(text || '').matchAll(/@(#?[a-z0-9_-]+)/gi)) {
+  for (const m of String(text || '').matchAll(/(?:^|[\s(\[{,:"'])@(#?[a-z0-9_-]+)(?![/a-z0-9_-]|\.[a-z0-9])/gi)) {
     const token = m[1].toLowerCase();
     if (token.startsWith('#')) channelMentions.add(token.slice(1));
     else mentions.add(token);
@@ -79,6 +80,7 @@ export function registerBoardMember(workdir, member, { role = 'worker', channels
     channels: [...new Set(['main', ...channels.map((c) => c.replace(/^#/, '').toLowerCase())])],
     status,
     last_read_seq: meta.members[member]?.last_read_seq || 0,
+    channel_cursors: meta.members[member]?.channel_cursors || {},
     last_post_seq: meta.members[member]?.last_post_seq || 0,
     updated_at: new Date().toISOString()
   };
@@ -94,7 +96,8 @@ export function postMessage(workdir, { from = 'coordinator', channel = 'main', t
   fs.mkdirSync(path.dirname(boardPath), { recursive: true });
 
   const entries = readAllEntries(workdir);
-  const seq = entries.length > 0 ? entries[entries.length - 1].seq + 1 : 1;
+  const maxSeq = entries.reduce((max, e) => (Number.isInteger(e.seq) && e.seq > max ? e.seq : max), 0);
+  const seq = maxSeq + 1;
   const cleanChannel = String(channel || 'main').replace(/^#/, '').toLowerCase();
   const parsed = parseMentions(text);
   const ts = new Date().toISOString();
@@ -119,10 +122,20 @@ export function postMessage(workdir, { from = 'coordinator', channel = 'main', t
     meta.channels[cleanChannel] = { topic: '', archived: false };
   }
   if (!meta.members[from]) {
-    meta.members[from] = { role: from === 'coordinator' ? 'coordinator' : 'worker', channels: ['main', cleanChannel], last_read_seq: 0, last_post_seq: 0 };
+    meta.members[from] = {
+      role: from === 'coordinator' ? 'coordinator' : 'worker',
+      channels: ['main', cleanChannel],
+      last_read_seq: 0,
+      channel_cursors: {},
+      last_post_seq: 0
+    };
   }
+  meta.members[from].channel_cursors = meta.members[from].channel_cursors || {};
   meta.members[from].last_post_seq = seq;
-  meta.members[from].last_read_seq = Math.max(meta.members[from].last_read_seq || 0, seq);
+  meta.members[from].channel_cursors[cleanChannel] = Math.max(meta.members[from].channel_cursors[cleanChannel] || 0, seq);
+  if (cleanChannel === 'main') {
+    meta.members[from].last_read_seq = Math.max(meta.members[from].last_read_seq || 0, seq);
+  }
   meta.members[from].last_post_time = ts;
   meta.members[from].status = entry.done ? 'waiting' : 'working';
   saveBoardMeta(workdir, meta);
@@ -130,25 +143,43 @@ export function postMessage(workdir, { from = 'coordinator', channel = 'main', t
   return entry;
 }
 
-export function readBoard(workdir, { since = 0, channel = null, reader = null, limit = 200 } = {}) {
+export function readBoard(workdir, { since = 0, channel = null, reader = null, limit = 200, tail = false } = {}) {
   const entries = readAllEntries(workdir);
   const cleanChannel = channel && channel !== '*' ? String(channel).replace(/^#/, '').toLowerCase() : null;
+  const rawSince = Number(since);
+  const safeSince = Number.isFinite(rawSince) && rawSince >= 0 ? rawSince : 0;
 
-  let filtered = entries.filter((e) => e.seq > Number(since || 0));
+  let filtered = entries.filter((e) => Number.isFinite(e.seq) && e.seq > safeSince);
   if (cleanChannel) {
     filtered = filtered.filter((e) => e.channel === cleanChannel || e.channel === 'main');
   }
   if (limit && filtered.length > limit) {
-    filtered = filtered.slice(0, limit);
+    filtered = tail ? filtered.slice(-limit) : filtered.slice(0, limit);
   }
 
   if (reader && filtered.length > 0) {
     const meta = loadBoardMeta(workdir);
-    meta.members[reader] = meta.members[reader] || { role: 'worker', channels: ['main'], last_read_seq: 0, last_post_seq: 0 };
-    meta.members[reader].last_read_seq = Math.max(
-      meta.members[reader].last_read_seq || 0,
-      filtered[filtered.length - 1].seq
-    );
+    meta.members[reader] = meta.members[reader] || {
+      role: reader === 'coordinator' ? 'coordinator' : 'worker',
+      channels: ['main'],
+      last_read_seq: 0,
+      channel_cursors: {},
+      last_post_seq: 0
+    };
+    meta.members[reader].channel_cursors = meta.members[reader].channel_cursors || {};
+    const maxSeq = filtered.reduce((max, e) => (e.seq > max ? e.seq : max), 0);
+    for (const e of filtered) {
+      const ch = e.channel || 'main';
+      meta.members[reader].channel_cursors[ch] = Math.max(meta.members[reader].channel_cursors[ch] || 0, e.seq);
+    }
+    if (!cleanChannel) {
+      meta.members[reader].channel_cursors['*'] = Math.max(meta.members[reader].channel_cursors['*'] || 0, maxSeq);
+      meta.members[reader].last_read_seq = Math.max(meta.members[reader].last_read_seq || 0, maxSeq);
+    } else if (cleanChannel === 'main') {
+      meta.members[reader].last_read_seq = Math.max(meta.members[reader].last_read_seq || 0, maxSeq);
+    } else {
+      meta.members[reader].channel_cursors[cleanChannel] = Math.max(meta.members[reader].channel_cursors[cleanChannel] || 0, maxSeq);
+    }
     saveBoardMeta(workdir, meta);
   }
 
@@ -158,7 +189,7 @@ export function readBoard(workdir, { since = 0, channel = null, reader = null, l
 export function getBoardStatus(workdir) {
   const entries = readAllEntries(workdir);
   const meta = loadBoardMeta(workdir);
-  const headSeq = entries.length > 0 ? entries[entries.length - 1].seq : 0;
+  const headSeq = entries.reduce((max, e) => (Number.isInteger(e.seq) && e.seq > max ? e.seq : max), 0);
   return {
     head_seq: headSeq,
     total_messages: entries.length,

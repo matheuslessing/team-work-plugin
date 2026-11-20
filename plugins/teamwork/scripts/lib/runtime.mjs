@@ -110,9 +110,13 @@ export function startWatchdogDaemon(workdir, cliScriptPath, windowMin = 30, inte
     {
       cwd: workdir,
       detached: true,
-      stdio: 'ignore'
+      stdio: 'ignore',
+      windowsHide: true
     }
   );
+  if (!child.pid) {
+    return { running: false, pid: null, config: null };
+  }
   child.unref();
 
   const meta = {
@@ -121,12 +125,17 @@ export function startWatchdogDaemon(workdir, cliScriptPath, windowMin = 30, inte
     intervalMinutes: intervalMin,
     startedAt: new Date().toISOString(),
     lastPulseAt: new Date().toISOString(),
-    pulseCount: 1,
+    pulseCount: 0,
     workdir
   };
   fs.writeFileSync(pidPath, String(child.pid), 'utf8');
   fs.writeFileSync(jsonPath, JSON.stringify(meta, null, 2), 'utf8');
   runWatchdogPulse(workdir, windowMin, intervalMin);
+  try {
+    Object.assign(meta, JSON.parse(fs.readFileSync(jsonPath, 'utf8')));
+  } catch {
+    meta.pulseCount = 1;
+  }
 
   if (!quiet) {
     console.log(`[WATCH_DOG] Started 30-min Orchestrator VM keep-alive daemon (PID ${child.pid}, window=${windowMin}m, pulse=${intervalMin}m).`);
@@ -137,15 +146,15 @@ export function startWatchdogDaemon(workdir, cliScriptPath, windowMin = 30, inte
 export function stopWatchdogDaemon(workdir, quiet = false) {
   const { pidPath } = getWatchdogPaths(workdir);
   const current = getWatchdogStatus(workdir);
-  if (current.running && current.pid) {
+  if (fs.existsSync(pidPath)) {
+    fs.unlinkSync(pidPath);
+  }
+  if (current.running && current.pid && current.pid !== process.pid) {
     try {
       process.kill(current.pid, 'SIGTERM');
     } catch {
       // ignore
     }
-  }
-  if (fs.existsSync(pidPath)) {
-    fs.unlinkSync(pidPath);
   }
   if (!quiet) {
     console.log('[WATCH_DOG] Stopped Orchestrator VM keep-alive daemon.');
@@ -173,25 +182,59 @@ export function detectEnvironment(workdir, { explicitFlag = '' } = {}) {
     }
   }
 
-  let hasDevinPythonSdk = false;
-  try {
-    execSync('python3 -c "import devin"', { stdio: 'pipe', timeout: 2000 });
-    hasDevinPythonSdk = true;
-    signals.push('python3_import_devin');
-  } catch {
-    // not installed
-  }
-
   for (const key of ['DEVIN_CLOUD', 'DEVIN_SESSION_ID', 'DEVIN_VM', 'DEVIN_ORG_ID', 'DEVIN_WORKFLOW', 'DEVIN_ENVIRONMENT']) {
     if (process.env[key]) signals.push(`env:${key}`);
+  }
+  const hasDevinEnv = signals.some((s) => s.startsWith('env:DEVIN_'));
+
+  if (process.env.ANTIGRAVITY_CLI || process.env.ANTIGRAVITY_SESSION_ID) {
+    signals.push('env:ANTIGRAVITY');
+  }
+
+  const hasOptDevin = process.platform === 'linux' && fs.existsSync('/opt/.devin');
+  if (hasOptDevin) {
+    signals.push('linux_opt_devin(/opt/.devin)');
+  }
+
+  const hasExplicitResolution = Boolean(
+    flag === 'cloud' ||
+      flag === 'devin_cloud' ||
+      flag === 'local' ||
+      flag === 'cli' ||
+      flag === 'devin_cli_local' ||
+      flag === 'antigravity' ||
+      envOverride === 'cloud' ||
+      envOverride === 'devin_cloud' ||
+      envOverride === 'local' ||
+      envOverride === 'cli' ||
+      envOverride === 'devin_cli_local' ||
+      envOverride === 'antigravity' ||
+      pinnedRuntime
+  );
+
+  let hasDevinPythonSdk = false;
+  if (!hasExplicitResolution && !hasDevinEnv && !hasOptDevin) {
+    try {
+      execSync('python3 -c "import devin"', { stdio: 'pipe', timeout: 2000 });
+      hasDevinPythonSdk = true;
+      signals.push('python3_import_devin');
+    } catch {
+      // not installed
+    }
   }
 
   if (
     process.platform === 'linux' &&
-    (fs.existsSync('/home/ubuntu') || process.env.USER === 'ubuntu' || process.env.USER === 'devin')
+    (fs.existsSync('/home/ubuntu') || process.env.USER === 'ubuntu' || process.env.USER === 'devin') &&
+    (hasOptDevin || hasDevinEnv || hasDevinPythonSdk)
   ) {
     signals.push('linux_cloud_vm(/home/ubuntu)');
   }
+
+  const hasCloudSignals = signals.some(
+    (s) => s.startsWith('env:DEVIN_') || s.startsWith('linux_') || s === 'python3_import_devin'
+  );
+  const hasAgySignals = signals.includes('env:ANTIGRAVITY');
 
   let runtime = 'DEVIN_CLI_LOCAL';
   let pinned = false;
@@ -204,22 +247,37 @@ export function detectEnvironment(workdir, { explicitFlag = '' } = {}) {
     runtime = 'DEVIN_CLI_LOCAL';
     pinned = true;
     signals.push('flag:--env=local');
+  } else if (flag === 'antigravity') {
+    runtime = 'ANTIGRAVITY';
+    pinned = true;
+    signals.push('flag:--env=antigravity');
   } else if (envOverride === 'cloud' || envOverride === 'devin_cloud') {
     runtime = 'DEVIN_CLOUD';
     signals.push('env:TEAMWORK_RUNTIME=cloud');
-  } else if (envOverride === 'local' || envOverride === 'cli') {
+  } else if (envOverride === 'local' || envOverride === 'cli' || envOverride === 'devin_cli_local') {
     runtime = 'DEVIN_CLI_LOCAL';
     signals.push('env:TEAMWORK_RUNTIME=local');
+  } else if (envOverride === 'antigravity') {
+    runtime = 'ANTIGRAVITY';
+    signals.push('env:TEAMWORK_RUNTIME=antigravity');
   } else if (pinnedRuntime) {
     runtime = pinnedRuntime;
-  } else if (signals.length > 0) {
+    pinned = true;
+  } else if (hasCloudSignals) {
     runtime = 'DEVIN_CLOUD';
+  } else if (hasAgySignals) {
+    runtime = 'ANTIGRAVITY';
   } else {
     signals.push(`platform:${process.platform}_local_cli`);
   }
 
   const workflowTarget = path.join(twRoot, 'workflow.py');
   const isCloud = runtime === 'DEVIN_CLOUD';
+  const primaryEngine = isCloud
+    ? 'Devin Dynamic Workflow (.agents/teamwork/workflow.py -> full | quick | survey | gate)'
+    : runtime === 'ANTIGRAVITY'
+      ? 'Antigravity Native Subagents & Swarm Board (.agents/teamwork/board.jsonl)'
+      : 'Devin CLI Custom Subagents + Local Git Worktrees';
 
   return {
     runtime,
@@ -229,9 +287,7 @@ export function detectEnvironment(workdir, { explicitFlag = '' } = {}) {
     workflowPath: workflowTarget,
     watchdogWindowMinutes: 30,
     watchdogPulseMinutes: 10,
-    primaryEngine: isCloud
-      ? 'Devin Dynamic Workflow (.agents/teamwork/workflow.py -> full | quick | survey | gate)'
-      : 'Devin CLI Custom Subagents + Local Git Worktrees',
+    primaryEngine,
     fallbackEngine: isCloud
       ? 'Managed Devins / Devin MCP (devin_session_create + devin_session_gather + devin_schedule_manage)'
       : 'Antigravity / Swarm Board (.agents/teamwork/board.jsonl)'

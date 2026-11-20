@@ -6,28 +6,33 @@ import { getTeamworkRoot, loadState } from './state-machine.mjs';
 export function detectStalls(workdir, { staleMinutes = 10, nowMs = Date.now() } = {}) {
   const state = loadState(workdir);
   const boardStatus = getBoardStatus(workdir);
-  const entries = readBoard(workdir, { since: 0, limit: 1000 });
-  const staleMs = Math.max(0, staleMinutes) * 60 * 1000;
+  const entries = readBoard(workdir, { since: 0, limit: 1000, tail: true });
+  const parsedStale = Number(staleMinutes);
+  const safeStaleMinutes = Number.isFinite(parsedStale) ? Math.max(0, parsedStale) : 10;
+  const staleMs = safeStaleMinutes * 60 * 1000;
 
   const coordinatorDone = entries.some(
     (e) => e.from === 'coordinator' && e.done && (e.mentions || []).length === 0
   );
-  if (state.phase === 'DONE' || coordinatorDone) {
+  if (state.phase === 'DONE' || state.phase === 'FAILED' || coordinatorDone) {
     return {
       dormant: true,
       stalled: false,
       stalls: [],
       head_seq: boardStatus.head_seq,
-      recommended_action: 'Go dormant: mission is DONE.'
+      recommended_action: `Go dormant: mission is ${state.phase === 'FAILED' ? 'FAILED' : 'DONE'}.`
     };
   }
 
   const stalls = [];
   const members = boardStatus.members || {};
-  const coordLastRead = members.coordinator?.last_read_seq || 0;
+  const coordCursors = members.coordinator?.channel_cursors || {};
+  const coordHasCursors = Object.keys(coordCursors).length > 0;
+  const coordWildcard = coordHasCursors ? coordCursors['*'] || 0 : members.coordinator?.last_read_seq || 0;
 
   // 1. Unaddressed results (done posts with no @mention or unread by coordinator)
   for (const e of entries) {
+    const channelCursor = Math.max(coordWildcard, coordCursors[e.channel || 'main'] || 0);
     if (e.from !== 'coordinator' && e.done && (e.mentions || []).length === 0) {
       stalls.push({
         kind: 'unaddressed_result',
@@ -36,8 +41,12 @@ export function detectStalls(workdir, { staleMinutes = 10, nowMs = Date.now() } 
         channel: e.channel,
         summary: `#${e.seq} from ${e.from} posted [done] with no @mention.`
       });
-    } else if (e.seq > coordLastRead && (e.mentions || []).includes('coordinator')) {
-      const ageMs = nowMs - Date.parse(e.timestamp || 0);
+    } else if (
+      e.seq > channelCursor &&
+      (e.mentions || []).some((m) => String(m).toLowerCase() === 'coordinator')
+    ) {
+      const tsMs = Date.parse(e.timestamp || '');
+      const ageMs = Number.isFinite(tsMs) ? nowMs - tsMs : 0;
       if (ageMs >= staleMs) {
         stalls.push({
           kind: 'coordinator_unread',
@@ -49,18 +58,25 @@ export function detectStalls(workdir, { staleMinutes = 10, nowMs = Date.now() } 
     }
   }
 
-  // 2. Unanswered @mentions to workers
+  // 2. Unanswered @mentions to active (non-retired) workers
+  const retiredStatuses = new Set(['retired', 'killed', 'done', 'completed']);
   for (const [name, info] of Object.entries(members)) {
-    if (name === 'coordinator' || name === 'monitor' || name === 'narrator') continue;
+    const lowerName = name.toLowerCase();
+    if (lowerName === 'coordinator' || lowerName === 'monitor' || lowerName === 'narrator') continue;
+    const memberStatus = String(info?.status || '').toLowerCase();
+    const agentStatus = String(state.agents?.[name]?.status || '').toLowerCase();
+    if (retiredStatuses.has(memberStatus) || retiredStatuses.has(agentStatus)) continue;
+
     const lastPostSeq = info.last_post_seq || 0;
-    const unanswered = entries.filter(
-      (e) =>
-        e.seq > lastPostSeq &&
-        ((e.mentions || []).includes(name) || (e.mentions || []).includes('all'))
-    );
+    const unanswered = entries.filter((e) => {
+      if (e.seq <= lastPostSeq) return false;
+      const mentions = (e.mentions || []).map((m) => String(m).toLowerCase());
+      return mentions.includes(lowerName) || mentions.includes('all');
+    });
     if (unanswered.length > 0) {
       const oldest = unanswered[0];
-      const ageMs = nowMs - Date.parse(oldest.timestamp || 0);
+      const tsMs = Date.parse(oldest.timestamp || '');
+      const ageMs = Number.isFinite(tsMs) ? nowMs - tsMs : 0;
       if (ageMs >= staleMs) {
         stalls.push({
           kind: 'unanswered_mention',
