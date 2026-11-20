@@ -5,56 +5,98 @@ import {
   EDIT_TOOLS,
   EXEC_TOOLS,
   extractCommand,
-  extractPathsFromCommand,
+  extractMutatorWriteTargets,
+  extractRedirectTargets,
   extractTargetPath,
-  isMutatingShellCommand
+  splitUnquoted,
+  stripHeredocBodies,
+  tokenizeArgs,
+  unwrapCommandTokens
 } from '../scripts/core/hasp-runner.mjs';
 import { validateMemoryDoc, validateMemoryIndexSync } from '../scripts/core/validator.mjs';
 import { rebuildIndex, resolveMemoryRoot } from '../scripts/lib/memory-engine.mjs';
 
 export const meta = {
   id: 'pf-memory-guard',
-  version: '1.1.0',
+  version: '1.2.0',
   events: ['PreToolUse', 'PostToolUse', 'Stop']
 };
 
 const MEMORY_FOLDERS = new Set(['architecture', 'decisions', 'contracts', 'gotchas']);
 
-function isManagedMemoryMarkdown(workdir, target) {
+function isManagedMemoryMarkdown(workdir, baseCwd, target) {
   if (!target) return false;
   const memRoot = resolveMemoryRoot(workdir);
-  const abs = path.resolve(workdir, target);
+  const abs = path.resolve(baseCwd || workdir, target);
   const rel = normalizePosix(path.relative(memRoot, abs));
-  if (rel.startsWith('..') || !rel.endsWith('.md')) return false;
+  if (rel.startsWith('..') || path.isAbsolute(rel) || !rel.endsWith('.md')) return false;
   const topDir = rel.split('/')[0];
   return MEMORY_FOLDERS.has(topDir);
 }
 
-function getManagedExecMdPaths(workdir, cmd) {
-  if (!cmd || /\bforge-cli\.mjs\b/i.test(cmd) || !isMutatingShellCommand(cmd)) return [];
-  return extractPathsFromCommand(cmd, /(?:[A-Za-z]:)?[A-Za-z0-9_./\\-]+\.md/g).filter(
-    (p) => isManagedMemoryMarkdown(workdir, p) && fs.existsSync(path.resolve(workdir, p))
-  );
+function isForgeCliStage(stage) {
+  const cmdTokens = unwrapCommandTokens(tokenizeArgs(stage));
+  if (cmdTokens.length < 2) return false;
+  const bin = path.basename(cmdTokens[0]).toLowerCase().replace(/\.exe$/, '');
+  if (!bin.startsWith('node')) return false;
+  const scriptTok = cmdTokens.slice(1).find((t) => !t.startsWith('-')) || '';
+  return /(?:^|[\\/])forge-cli\.mjs$/.test(scriptTok);
+}
+
+function getManagedExecMdOps(workdir, baseCwd, cmd) {
+  const stripped = stripHeredocBodies(cmd);
+  if (!stripped.trim()) return [];
+  let effectiveCwd = baseCwd || workdir;
+  const ops = [];
+  const seen = new Set();
+
+  for (const seg of splitUnquoted(stripped, 'commands')) {
+    const toks = tokenizeArgs(seg);
+    if (toks[0] === 'cd' && toks[1] && !toks[1].startsWith('-')) {
+      effectiveCwd = path.resolve(effectiveCwd, toks[1]);
+      continue;
+    }
+
+    const stages = splitUnquoted(seg, 'pipes');
+    if (stages.every((s) => isForgeCliStage(s))) continue;
+
+    const candidates = [
+      ...extractRedirectTargets(seg),
+      ...stages.flatMap((s) => (isForgeCliStage(s) ? [] : extractMutatorWriteTargets(s)))
+    ];
+
+    for (const candidate of candidates) {
+      if (!isManagedMemoryMarkdown(workdir, effectiveCwd, candidate)) continue;
+      const abs = path.resolve(effectiveCwd, candidate);
+      if (!seen.has(abs)) {
+        seen.add(abs);
+        ops.push({ target: candidate, abs });
+      }
+    }
+  }
+  return ops;
 }
 
 export function should_activate(state, action) {
   const workdir = path.resolve(state.workdir || process.cwd());
+  const baseCwd = path.resolve(state.execCwd || state.baseCwd || workdir);
+
   if (action?.event === 'Stop') {
-    const memRoot = resolveMemoryRoot(workdir);
-    return fs.existsSync(memRoot);
+    return fs.existsSync(resolveMemoryRoot(workdir));
   }
   const tool = action?.tool || '';
   if (EDIT_TOOLS.has(tool)) {
-    return isManagedMemoryMarkdown(workdir, extractTargetPath(action));
+    return isManagedMemoryMarkdown(workdir, baseCwd, extractTargetPath(action));
   }
   if (action?.event === 'PostToolUse' && EXEC_TOOLS.has(tool)) {
-    return getManagedExecMdPaths(workdir, extractCommand(action)).length > 0;
+    return getManagedExecMdOps(workdir, baseCwd, extractCommand(action)).length > 0;
   }
   return false;
 }
 
 export async function intervene(state, action) {
   const workdir = path.resolve(state.workdir || process.cwd());
+  const baseCwd = path.resolve(state.execCwd || state.baseCwd || workdir);
   const memRoot = resolveMemoryRoot(workdir);
 
   if (action?.event === 'Stop') {
@@ -69,39 +111,59 @@ export async function intervene(state, action) {
   }
 
   if (action?.event === 'PostToolUse' && EXEC_TOOLS.has(action?.tool || '')) {
-    const targets = getManagedExecMdPaths(workdir, extractCommand(action));
-    if (targets.length === 0) return { type: 'NOOP' };
+    const ops = getManagedExecMdOps(workdir, baseCwd, extractCommand(action));
+    if (ops.length === 0) return { type: 'NOOP' };
+
     const allErrors = [];
+    const failedRels = [];
     const validatedRels = [];
-    for (const t of targets) {
-      const abs = path.resolve(workdir, t);
+    let removedAny = false;
+
+    for (const { abs } of ops) {
       const rel = normalizePosix(path.relative(memRoot, abs));
+      if (!fs.existsSync(abs)) {
+        removedAny = true;
+        continue;
+      }
       const raw = fs.readFileSync(abs, 'utf8');
       const res = validateMemoryDoc(rel, raw, workdir, { checkDisk: true });
-      if (!res.ok) allErrors.push(...res.errors);
-      else validatedRels.push(rel);
+      if (!res.ok) {
+        allErrors.push(...res.errors);
+        failedRels.push(rel);
+      } else {
+        validatedRels.push(rel);
+      }
     }
+
     if (allErrors.length > 0) {
       return {
         type: 'INJECT_CONTEXT',
         reason: `Memory document(s) violated PMSP schema`,
-        payload: `[HASP:pf-memory-guard] Fix ${validatedRels.concat(targets).join(', ')} before finishing:\n- ${allErrors.join('\n- ')}`
+        payload: `[HASP:pf-memory-guard] Fix ${failedRels.join(', ')} before finishing:\n- ${allErrors.join('\n- ')}`
       };
     }
+
     await rebuildIndex(workdir);
     return {
       type: 'INJECT_CONTEXT',
-      reason: `Recompiled memory.rc.json after valid update to ${validatedRels.join(', ')}`,
-      payload: `[HASP:pf-memory-guard] Validated ${validatedRels.join(', ')} and deterministically recompiled memory.rc.json.`
+      reason: removedAny
+        ? 'Recompiled memory.rc.json after memory document removal'
+        : `Recompiled memory.rc.json after valid update to ${validatedRels.join(', ')}`,
+      payload: `[HASP:pf-memory-guard] Validated ${validatedRels.length} document(s) and deterministically recompiled memory.rc.json.`
     };
   }
 
   const target = extractTargetPath(action);
-  const abs = path.resolve(workdir, target);
+  const abs = path.resolve(baseCwd, target);
   const rel = normalizePosix(path.relative(memRoot, abs));
 
   if (action?.event === 'PreToolUse') {
-    const candidateContent = action?.args?.Content ?? action?.args?.content ?? action?.args?.file_text;
+    const candidateContent =
+      action?.args?.Content ??
+      action?.args?.content ??
+      action?.args?.file_text ??
+      action?.args?.CodeContent ??
+      action?.args?.code_content;
     if (typeof candidateContent === 'string') {
       const res = validateMemoryDoc(rel, candidateContent, workdir, { checkDisk: true });
       if (!res.ok) {
@@ -114,8 +176,15 @@ export async function intervene(state, action) {
     return { type: 'ALLOW' };
   }
 
-  // PostToolUse: validate saved file and recompile memory.rc.json if valid
-  if (!fs.existsSync(abs)) return { type: 'NOOP' };
+  // PostToolUse (EDIT_TOOLS): validate saved file and recompile memory.rc.json if valid
+  if (!fs.existsSync(abs)) {
+    await rebuildIndex(workdir);
+    return {
+      type: 'INJECT_CONTEXT',
+      reason: `Recompiled memory.rc.json after removing ${rel}`,
+      payload: `[HASP:pf-memory-guard] Recompiled memory.rc.json after deleting ${rel}.`
+    };
+  }
   const raw = fs.readFileSync(abs, 'utf8');
   const res = validateMemoryDoc(rel, raw, workdir, { checkDisk: true });
   if (!res.ok) {

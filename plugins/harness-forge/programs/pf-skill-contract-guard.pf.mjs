@@ -5,60 +5,89 @@ import {
   EDIT_TOOLS,
   EXEC_TOOLS,
   extractCommand,
-  extractPathsFromCommand,
+  extractMutatorWriteTargets,
+  extractRedirectTargets,
   extractTargetPath,
-  isMutatingShellCommand
+  splitUnquoted,
+  stripHeredocBodies,
+  tokenizeArgs,
+  unwrapCommandTokens
 } from '../scripts/core/hasp-runner.mjs';
 import { validateSkillDir } from '../scripts/core/validator.mjs';
 
 export const meta = {
   id: 'pf-skill-contract-guard',
-  version: '1.1.0',
+  version: '1.2.0',
   event: 'PostToolUse'
 };
 
-function getSkillDirs(workdir, action) {
+function isForgeCliStage(stage) {
+  const cmdTokens = unwrapCommandTokens(tokenizeArgs(stage));
+  if (cmdTokens.length < 2) return false;
+  const bin = path.basename(cmdTokens[0]).toLowerCase().replace(/\.exe$/, '');
+  if (!bin.startsWith('node')) return false;
+  const scriptTok = cmdTokens.slice(1).find((t) => !t.startsWith('-')) || '';
+  return /(?:^|[\\/])forge-cli\.mjs$/.test(scriptTok);
+}
+
+function getSkillDirs(state, action) {
+  const workdir = path.resolve(state.workdir || process.cwd());
+  const baseCwd = path.resolve(state.execCwd || state.baseCwd || workdir);
   const tool = action?.tool || '';
+
   if (EDIT_TOOLS.has(tool)) {
     const target = normalizePosix(extractTargetPath(action));
     if (!target) return [];
     const base = path.basename(target);
     if (base !== 'SKILL.md' && base !== 'skill.contract.json') return [];
-    const full = path.resolve(workdir, target);
-    const skillDir = path.dirname(full);
+    const skillDir = path.dirname(path.resolve(baseCwd, target));
     return fs.existsSync(skillDir) ? [skillDir] : [];
   }
+
   if (EXEC_TOOLS.has(tool)) {
-    const cmd = extractCommand(action);
-    if (!cmd || /\bforge-cli\.mjs\b/i.test(cmd) || !isMutatingShellCommand(cmd)) return [];
-    const matches = extractPathsFromCommand(
-      cmd,
-      /(?:[A-Za-z]:)?[A-Za-z0-9_./\\-]*(?:SKILL\.md|skill\.contract\.json)/g
-    );
+    const stripped = stripHeredocBodies(extractCommand(action));
+    if (!stripped.trim()) return [];
+    let effectiveCwd = baseCwd;
     const dirs = [];
     const seen = new Set();
-    for (const m of matches) {
-      const full = path.resolve(workdir, m);
-      if (!fs.existsSync(full)) continue;
-      const skillDir = path.dirname(full);
-      if (fs.existsSync(skillDir) && !seen.has(skillDir)) {
-        seen.add(skillDir);
-        dirs.push(skillDir);
+
+    for (const seg of splitUnquoted(stripped, 'commands')) {
+      const toks = tokenizeArgs(seg);
+      if (toks[0] === 'cd' && toks[1] && !toks[1].startsWith('-')) {
+        effectiveCwd = path.resolve(effectiveCwd, toks[1]);
+        continue;
+      }
+      const stages = splitUnquoted(seg, 'pipes');
+      if (stages.every((s) => isForgeCliStage(s))) continue;
+
+      const writeTargets = [
+        ...extractRedirectTargets(seg),
+        ...stages.flatMap((s) => (isForgeCliStage(s) ? [] : extractMutatorWriteTargets(s)))
+      ];
+      for (const m of writeTargets) {
+        const base = path.basename(normalizePosix(m));
+        if (base !== 'SKILL.md' && base !== 'skill.contract.json') continue;
+        const full = path.resolve(effectiveCwd, m);
+        if (!fs.existsSync(full)) continue;
+        const skillDir = path.dirname(full);
+        if (fs.existsSync(skillDir) && !seen.has(skillDir)) {
+          seen.add(skillDir);
+          dirs.push(skillDir);
+        }
       }
     }
     return dirs;
   }
+
   return [];
 }
 
 export function should_activate(state, action) {
-  const workdir = path.resolve(state.workdir || process.cwd());
-  return getSkillDirs(workdir, action).length > 0;
+  return getSkillDirs(state, action).length > 0;
 }
 
 export function intervene(state, action) {
-  const workdir = path.resolve(state.workdir || process.cwd());
-  const skillDirs = getSkillDirs(workdir, action);
+  const skillDirs = getSkillDirs(state, action);
   const failures = [];
   for (const skillDir of skillDirs) {
     const res = validateSkillDir(skillDir);

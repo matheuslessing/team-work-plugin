@@ -2,7 +2,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { formatHookOutput, runProgramFunctions } from './core/hasp-runner.mjs';
+import {
+  extractCommand,
+  extractTargetPath,
+  formatHookOutput,
+  resolveEffectiveWorkdir,
+  runProgramFunctions
+} from './core/hasp-runner.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -10,17 +16,33 @@ const pluginRoot = path.resolve(__dirname, '..');
 const programsDir = path.join(pluginRoot, 'programs');
 
 function getFlag(args, name, def = '') {
-  const idx = args.indexOf(name);
-  return idx !== -1 && idx + 1 < args.length ? args[idx + 1] : def;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === name && i + 1 < args.length) return args[i + 1];
+    if (args[i].startsWith(`${name}=`)) return args[i].slice(name.length + 1);
+  }
+  return def;
 }
 
-function readStdinSafe() {
+async function readStdinAsync() {
   if (process.stdin.isTTY) return '';
-  try {
-    return fs.readFileSync(0, 'utf8');
-  } catch {
-    return '';
+  const chunks = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(chunk);
   }
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+function parseArgsObject(rawArgs) {
+  if (!rawArgs) return {};
+  if (typeof rawArgs === 'string') {
+    try {
+      const parsed = JSON.parse(rawArgs);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return typeof rawArgs === 'object' ? rawArgs : {};
 }
 
 function parseAction(stdinObj, event) {
@@ -28,7 +50,7 @@ function parseAction(stdinObj, event) {
   return {
     event,
     tool: tc.name || stdinObj.tool_name || stdinObj.tool || '',
-    args: tc.args || stdinObj.tool_input || stdinObj.args || {},
+    args: parseArgsObject(tc.args || stdinObj.tool_input || stdinObj.args),
     error: stdinObj.error || stdinObj.toolError || ''
   };
 }
@@ -37,7 +59,7 @@ async function main() {
   const args = process.argv.slice(2);
   const event = args[0] || 'PreToolUse';
   const adapter = getFlag(args, '--adapter', process.env.ANTIGRAVITY_CLI ? 'antigravity' : 'devin');
-  const rawStdin = readStdinSafe();
+  const rawStdin = await readStdinAsync();
   let stdinObj = {};
   if (rawStdin.trim()) {
     try {
@@ -47,15 +69,15 @@ async function main() {
     }
   }
 
-  const workdir = path.resolve(
-    getFlag(args, '--workdir', '') ||
-      stdinObj.cwd ||
-      (Array.isArray(stdinObj.workspacePaths) ? stdinObj.workspacePaths[0] : '') ||
-      process.env.DEVIN_PROJECT_DIR ||
-      process.cwd()
-  );
-
   const action = parseAction(stdinObj, event);
+  const { workdir, baseCwd } = resolveEffectiveWorkdir({
+    cliWorkdir: getFlag(args, '--workdir', ''),
+    stdinObj,
+    action,
+    targetPath: extractTargetPath(action),
+    command: extractCommand(action)
+  });
+
   const bomPath = fs.existsSync(path.join(workdir, '.memory'))
     ? path.join(workdir, '.memory', '.cache', 'forge-bom.json')
     : null;
@@ -63,7 +85,7 @@ async function main() {
   const result = await runProgramFunctions({
     programsDir,
     event,
-    state: { workdir },
+    state: { workdir, execCwd: baseCwd, baseCwd },
     action,
     bomPath
   });
@@ -72,7 +94,7 @@ async function main() {
     adapter,
     event,
     result,
-    continuationActive: Boolean(stdinObj.continuationActive)
+    continuationActive: Boolean(stdinObj.continuationActive || stdinObj.stop_hook_active)
   });
   console.log(JSON.stringify(out.json));
   if (out.exitCode === 2) {

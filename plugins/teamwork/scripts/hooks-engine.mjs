@@ -2,7 +2,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { formatHookOutput, runProgramFunctions } from './core/hasp-runner.mjs';
+import {
+  extractCommand,
+  extractTargetPath,
+  formatHookOutput,
+  resolveEffectiveWorkdir,
+  runProgramFunctions
+} from './core/hasp-runner.mjs';
 import { detectEnvironment, getWatchdogStatus, startWatchdogDaemon } from './lib/runtime.mjs';
 import { getActiveOrchestrator, getTeamworkRoot, loadState } from './lib/state-machine.mjs';
 
@@ -13,17 +19,47 @@ const cliScriptPath = path.join(__dirname, 'teamwork-cli.mjs');
 const programsDir = path.join(pluginRoot, 'programs');
 
 function getFlag(args, name, def = '') {
-  const idx = args.indexOf(name);
-  return idx !== -1 && idx + 1 < args.length ? args[idx + 1] : def;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === name && i + 1 < args.length) return args[i + 1];
+    if (args[i].startsWith(`${name}=`)) return args[i].slice(name.length + 1);
+  }
+  return def;
 }
 
-function readStdinSafe() {
+async function readStdinAsync() {
   if (process.stdin.isTTY) return '';
-  try {
-    return fs.readFileSync(0, 'utf8');
-  } catch {
-    return '';
+  const chunks = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(chunk);
   }
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+function parseArgsObject(rawArgs) {
+  if (!rawArgs) return {};
+  if (typeof rawArgs === 'string') {
+    try {
+      const parsed = JSON.parse(rawArgs);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return typeof rawArgs === 'object' ? rawArgs : {};
+}
+
+function extractNestedError(stdinObj) {
+  if (stdinObj.error) return stdinObj.error;
+  if (stdinObj.toolError) return stdinObj.toolError;
+  const tr = stdinObj.tool_response || stdinObj.toolResult || null;
+  if (tr && typeof tr === 'object') {
+    if (tr.error) return tr.error;
+    const exitCode = tr.exit_code ?? tr.exitCode;
+    if (tr.is_error === true || (typeof exitCode === 'number' && exitCode !== 0)) {
+      return tr.stderr || tr.output || `Command exited with code ${exitCode ?? 1}`;
+    }
+  }
+  return '';
 }
 
 function parseAction(stdinObj, event) {
@@ -31,9 +67,9 @@ function parseAction(stdinObj, event) {
   return {
     event,
     tool: tc.name || stdinObj.tool_name || stdinObj.tool || '',
-    args: tc.args || stdinObj.tool_input || stdinObj.args || {},
-    error: stdinObj.error || stdinObj.toolError || '',
-    agentId: stdinObj.agentId || process.env.TEAMWORK_AGENT_ID || ''
+    args: parseArgsObject(tc.args || stdinObj.tool_input || stdinObj.args),
+    error: extractNestedError(stdinObj),
+    agentId: stdinObj.agentId || stdinObj.agent_id || process.env.TEAMWORK_AGENT_ID || ''
   };
 }
 
@@ -76,7 +112,7 @@ async function main() {
   const args = process.argv.slice(2);
   const event = args[0] || 'UserPromptSubmit';
   const adapter = getFlag(args, '--adapter', process.env.ANTIGRAVITY_CLI ? 'antigravity' : 'devin');
-  const rawStdin = readStdinSafe();
+  const rawStdin = await readStdinAsync();
   let stdinObj = {};
   if (rawStdin.trim()) {
     try {
@@ -86,17 +122,22 @@ async function main() {
     }
   }
 
-  const workdir = path.resolve(
-    getFlag(args, '--workdir', '') ||
-      stdinObj.cwd ||
-      (Array.isArray(stdinObj.workspacePaths) ? stdinObj.workspacePaths[0] : '') ||
-      process.env.DEVIN_PROJECT_DIR ||
-      process.cwd()
-  );
+  const action = parseAction(stdinObj, event);
+  const { workdir, baseCwd } = resolveEffectiveWorkdir({
+    cliWorkdir: getFlag(args, '--workdir', ''),
+    stdinObj,
+    action,
+    targetPath: extractTargetPath(action),
+    command: extractCommand(action)
+  });
 
   if (event === 'SessionStart' || event === 'UserPromptSubmit') {
     const envInfo = detectEnvironment(workdir);
-    const hasActiveMission = fs.existsSync(path.join(getTeamworkRoot(workdir), 'state.json'));
+    const stateJsonPath = path.join(getTeamworkRoot(workdir), 'state.json');
+    const state = fs.existsSync(stateJsonPath) ? loadState(workdir) : null;
+    const isTerminal = state && (state.phase === 'DONE' || state.phase === 'FAILED');
+    const hasActiveMission = Boolean(state && !isTerminal);
+
     if (envInfo.runtime === 'DEVIN_CLOUD' && hasActiveMission) {
       const wd = getWatchdogStatus(workdir);
       if (!wd.running) {
@@ -131,7 +172,6 @@ async function main() {
   }
 
   const teamworkState = loadState(workdir);
-  const action = parseAction(stdinObj, event);
   const activeAgentId = action.agentId || '';
   let activeScope = activeAgentId ? teamworkState.active_agent_scopes?.[activeAgentId] || null : null;
 
@@ -153,6 +193,8 @@ async function main() {
     event,
     state: {
       workdir,
+      execCwd: baseCwd,
+      baseCwd,
       activeAgentId,
       activeScope,
       teamworkState,
@@ -166,7 +208,7 @@ async function main() {
     adapter,
     event,
     result,
-    continuationActive: Boolean(stdinObj.continuationActive)
+    continuationActive: Boolean(stdinObj.continuationActive || stdinObj.stop_hook_active)
   });
   console.log(JSON.stringify(out.json));
   if (out.exitCode === 2) {

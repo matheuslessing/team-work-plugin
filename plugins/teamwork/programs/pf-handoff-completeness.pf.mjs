@@ -3,40 +3,71 @@ import path from 'node:path';
 import {
   EDIT_TOOLS,
   EXEC_TOOLS,
+  SCRIPT_WRITE_RE,
   extractCommand,
+  extractMutatorWriteTargets,
   extractPathsFromCommand,
+  extractRedirectTargets,
   extractTargetPath,
-  isMutatingShellCommand
+  splitUnquoted,
+  stripHeredocBodies,
+  tokenizeArgs,
+  unwrapCommandTokens
 } from '../scripts/core/hasp-runner.mjs';
-import { validateHandoff } from '../scripts/core/validator.mjs';
+import { evaluateLatestGate, validateHandoff } from '../scripts/core/validator.mjs';
 import { getActiveOrchestrator, getTeamworkRoot } from '../scripts/lib/state-machine.mjs';
 
 export const meta = {
   id: 'pf-handoff-completeness',
-  version: '1.1.0',
+  version: '1.2.0',
   events: ['PostToolUse', 'Stop']
 };
 
-function getTargetHandoffFiles(workdir, action) {
+const INLINE_INTERP_RE = /^(?:node|python[\d.]*|ruby|php|pwsh|powershell|perl)(?:\.exe)?$/i;
+
+function getTargetHandoffFiles(state, action) {
+  const workdir = path.resolve(state.workdir || process.cwd());
+  const baseCwd = path.resolve(state.execCwd || state.baseCwd || workdir);
   const tool = action?.tool || '';
+
   if (EDIT_TOOLS.has(tool)) {
     const target = extractTargetPath(action);
     if (path.basename(target).toLowerCase() !== 'handoff.md') return [];
-    const fullPath = path.resolve(workdir, target);
+    const fullPath = path.resolve(baseCwd, target);
     return fs.existsSync(fullPath) ? [{ target, fullPath }] : [];
   }
+
   if (EXEC_TOOLS.has(tool)) {
-    const cmd = extractCommand(action);
-    if (!isMutatingShellCommand(cmd)) return [];
-    const matches = extractPathsFromCommand(cmd, /(?:[A-Za-z]:)?[A-Za-z0-9_./\\-]*handoff\.md/gi);
+    const stripped = stripHeredocBodies(extractCommand(action));
+    if (!stripped.trim()) return [];
+    let effectiveCwd = baseCwd;
     const out = [];
     const seen = new Set();
-    for (const target of matches) {
-      if (path.basename(target).toLowerCase() !== 'handoff.md') continue;
-      const fullPath = path.resolve(workdir, target);
-      if (fs.existsSync(fullPath) && !seen.has(fullPath)) {
-        seen.add(fullPath);
-        out.push({ target, fullPath });
+
+    for (const seg of splitUnquoted(stripped, 'commands')) {
+      const toks = tokenizeArgs(seg);
+      if (toks[0] === 'cd' && toks[1] && !toks[1].startsWith('-')) {
+        effectiveCwd = path.resolve(effectiveCwd, toks[1]);
+        continue;
+      }
+
+      const targets = [...extractRedirectTargets(seg)];
+      for (const stage of splitUnquoted(seg, 'pipes')) {
+        targets.push(...extractMutatorWriteTargets(stage));
+        const cmdToks = unwrapCommandTokens(tokenizeArgs(stage));
+        const bin = cmdToks[0] ? path.basename(cmdToks[0]).toLowerCase().replace(/\.exe$/, '') : '';
+        if (INLINE_INTERP_RE.test(bin) && SCRIPT_WRITE_RE.test(stage)) {
+          targets.push(...extractPathsFromCommand(stage, /(?:[A-Za-z]:)?[A-Za-z0-9_./\\-]*handoff\.md/gi));
+        }
+      }
+
+      for (const target of targets) {
+        if (path.basename(target).toLowerCase() !== 'handoff.md') continue;
+        const fullPath = path.resolve(effectiveCwd, target);
+        if (fs.existsSync(fullPath) && !seen.has(fullPath)) {
+          seen.add(fullPath);
+          out.push({ target, fullPath });
+        }
       }
     }
     return out;
@@ -50,7 +81,7 @@ export function should_activate(state, action) {
     const twRoot = getTeamworkRoot(workdir);
     return fs.existsSync(twRoot);
   }
-  return getTargetHandoffFiles(workdir, action).length > 0;
+  return getTargetHandoffFiles(state, action).length > 0;
 }
 
 export function intervene(state, action) {
@@ -63,12 +94,9 @@ export function intervene(state, action) {
     const briefingPath = path.join(twRoot, activeOrch.id, 'BRIEFING.md');
 
     if (fs.existsSync(gatePath) && fs.existsSync(briefingPath)) {
-      const gateContent = fs.readFileSync(gatePath, 'utf8');
+      const gateEval = evaluateLatestGate(fs.readFileSync(gatePath, 'utf8'));
       const briefingContent = fs.readFileSync(briefingPath, 'utf8');
-      const latestGate = gateContent.split(/^##\s+Gate/im).pop() || '';
-      const hasFail = /Gate Result:\s*\*\*FAIL\*\*/i.test(latestGate) || /INTEGRITY[_\s]VIOLATION|REQUEST_CHANGES/i.test(latestGate);
-      const hasPass = /Gate Result:\s*\*\*PASS\*\*/i.test(latestGate);
-      if (briefingContent.includes('[in-progress]') && hasFail && !hasPass) {
+      if (/\[in-progress\]/i.test(briefingContent) && gateEval.failed) {
         return {
           type: 'BLOCK',
           reason: `[HASP:pf-handoff-completeness] Stop blocked: ${activeOrch.id}/GATE_STATUS.md reports FAIL while milestone is still [in-progress]. Remediate and reach CLEAN before stopping.`
@@ -94,8 +122,7 @@ export function intervene(state, action) {
     return { type: 'ALLOW' };
   }
 
-  // PostToolUse on handoff.md
-  const files = getTargetHandoffFiles(workdir, action);
+  const files = getTargetHandoffFiles(state, action);
   if (files.length === 0) return { type: 'NOOP' };
   const allErrors = [];
   const badTargets = [];
