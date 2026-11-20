@@ -460,6 +460,18 @@ function scenario5RealHaspHooks(tmpRoot, plugins) {
   assert.equal(JSON.parse(preCloudRcExec.stdout).decision, 'block');
   assert.match(preCloudRcExec.stderr, /pf-rcjson-readonly/);
 
+  for (const okCmd of [
+    "cat <<'EOF' > .gitignore\n.memory/.cache/\nEOF",
+    'git add .memory/memory.rc.json'
+  ]) {
+    const okExec = runNode(
+      plugins.hfHooks,
+      ['PreToolUse', '--workdir', repo, '--adapter', 'devin'],
+      { input: JSON.stringify({ tool_name: 'exec', tool_input: { command: okCmd } }) }
+    );
+    assert.equal(okExec.status, 0, `pf-rcjson-readonly must allow legitimate command: ${okCmd}`);
+  }
+
   // 3. PostToolUse on tautological temp test file (both write_file and Cloud exec)
   const badTestFile = path.join(repo, 'tests', 'bad.test.mjs');
   const tautLine = ['expe', 'ct(true).toBe(true);'].join('');
