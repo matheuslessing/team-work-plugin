@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { estimateTokens, normalizePosix, parseFrontmatter, serializeFrontmatter, sha256Hex } from '../core/frontmatter.mjs';
+import { estimateTokens, normalizePosix, parseFrontmatter, serializeFrontmatter, sha256Text } from '../core/frontmatter.mjs';
 import { validateSkillDir } from '../core/validator.mjs';
 
 function tokenize(text) {
@@ -56,7 +56,7 @@ export function buildEcosystemGraph(skillsDir, { write = false } = {}) {
       program_functions: contract.O_operation?.program_functions || [],
       line_count: res.meta?.lineCount || 0,
       token_estimate: res.meta?.tokenEstimate || 0,
-      content_sha256: sha256Hex(`${skillMdRaw}\n${contractRaw}`),
+      content_sha256: sha256Text(`${skillMdRaw}\n${contractRaw}`),
       valid: res.ok
     });
     tokenSets.set(name, new Set(tokenize(`${name} ${desc}`)));
@@ -150,7 +150,7 @@ export function auditSkills(skillsDir, { strict = false, telemetryPath = null } 
       const contractRaw = fs.existsSync(path.join(dir, 'skill.contract.json'))
         ? fs.readFileSync(path.join(dir, 'skill.contract.json'), 'utf8')
         : '';
-      const currentSha = sha256Hex(`${skillMdRaw}\n${contractRaw}`);
+      const currentSha = sha256Text(`${skillMdRaw}\n${contractRaw}`);
       if (currentSha !== prevNode.content_sha256 && prevNode.version === contract.version) {
         warnings.push(
           `[${name}] Silent modification detected without version bump (${contract.version}) — run skillops graph or bump semver`
@@ -207,7 +207,7 @@ export function auditSkills(skillsDir, { strict = false, telemetryPath = null } 
   }
 
   return {
-    ok: errors.length === 0,
+    ok: errors.length === 0 && (!strict || warnings.length === 0),
     skillsDir: normalizePosix(abs),
     totalSkills: dirs.length,
     validSkillsCount: validSkills.length,

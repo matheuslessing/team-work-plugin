@@ -2,7 +2,7 @@
   "harness-forge-guardrails": {
     "PreToolUse": [
       {
-        "matcher": "edit|write_file|edit_file",
+        "matcher": "edit|write_file|edit_file|exec|run_command",
         "hooks": [
           {
             "type": "command",
@@ -14,7 +14,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "edit|write_file|edit_file",
+        "matcher": "edit|write_file|edit_file|exec|run_command",
         "hooks": [
           {
             "type": "command",

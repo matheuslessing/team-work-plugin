@@ -181,6 +181,12 @@ sequenceDiagram
 ## Installation
 
 > **Requirements:** Node.js `>= 18` (zero external `npm` dependencies — runs out of the box), Git, and Python `>= 3.8` (only for Devin Cloud `workflow.py`).
+>
+> **Devin Cloud VM Prerequisite (`Node.js >= 18`):** Base Devin Cloud VMs may ship without `node` in `PATH`, which prevents hooks and the `harness-forge-memory` stdio MCP server from starting (`exec: node: not found`). Ensure Node.js 22 LTS is included in your Devin Cloud snapshot setup (e.g., via `environment.yaml` or `/declarative-repo-setup`):
+> ```yaml
+> setup:
+>   - command -v node >/dev/null 2>&1 || (curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs)
+> ```
 
 ### 1. Install Full Meta-Plugin Suite (Devin CLI & Devin Cloud)
 ```bash

@@ -108,12 +108,26 @@ test('HASP pf-anti-cheat-test, pf-facade-runner, pf-loop-breaker, and Stop gate 
     assert.ok(types.has('FACADE_TEST_RUNNER'));
     assert.ok(types.has('PRODUCTION_STUB'));
 
-    // PostToolUse catches bad test edit immediately
+    // PostToolUse catches bad test edit immediately (both edit and Cloud exec)
     const postTest = runHook(tmp, 'PostToolUse', {
       toolCall: { name: 'write_file', args: { Path: 'tests/fake.test.mjs' } }
     });
     assert.equal(postTest.status, 0);
     assert.match(JSON.parse(postTest.stdout).hookSpecificOutput.additionalContext, /pf-anti-cheat-test/);
+
+    const postExecTest = runHook(tmp, 'PostToolUse', {
+      tool_name: 'exec',
+      tool_input: { command: "cat <<'EOF' > tests/fake.test.mjs\nconsole.log(1)\nEOF" }
+    });
+    assert.equal(postExecTest.status, 0);
+    assert.match(JSON.parse(postExecTest.stdout).hookSpecificOutput.additionalContext, /pf-anti-cheat-test/);
+
+    const postExecRunner = runHook(tmp, 'PostToolUse', {
+      tool_name: 'exec',
+      tool_input: { command: 'cat TestReport.txt > run_tests.sh' }
+    });
+    assert.equal(postExecRunner.status, 0);
+    assert.match(JSON.parse(postExecRunner.stdout).hookSpecificOutput.additionalContext, /pf-facade-runner/);
 
     // PostToolUse loop breaker fires on 3 identical errors
     for (let i = 0; i < 2; i++) {
@@ -142,6 +156,24 @@ test('HASP pf-anti-cheat-test, pf-facade-runner, pf-loop-breaker, and Stop gate 
     const cleanReport = scanProjectIntegrity({ workdir: tmp });
     assert.equal(cleanReport.verdict, 'CLEAN');
     assert.equal(cleanReport.findings.length, 0);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('SessionStart in DEVIN_CLOUD without initialized workspace stays STANDBY without creating .agents/teamwork', () => {
+  const tmp = makeTmpDir('tw-cloud-standby-');
+  try {
+    const res = spawnSync('node', [HOOKS_ENGINE, 'SessionStart', '--workdir', tmp, '--adapter', 'devin'], {
+      input: '{}',
+      env: { ...process.env, DEVIN_CLOUD: '1' },
+      encoding: 'utf8'
+    });
+    assert.equal(res.status, 0);
+    const out = JSON.parse(res.stdout);
+    assert.match(out.hookSpecificOutput.additionalContext, /STANDBY/);
+    assert.equal(fs.existsSync(path.join(tmp, '.agents', 'teamwork')), false);
+    assert.equal(fs.existsSync(path.join(tmp, '.agents', 'teamwork', 'watchdog.pid')), false);
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

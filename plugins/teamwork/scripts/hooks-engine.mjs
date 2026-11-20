@@ -96,7 +96,8 @@ async function main() {
 
   if (event === 'SessionStart' || event === 'UserPromptSubmit') {
     const envInfo = detectEnvironment(workdir);
-    if (envInfo.runtime === 'DEVIN_CLOUD') {
+    const hasActiveMission = fs.existsSync(path.join(getTeamworkRoot(workdir), 'state.json'));
+    if (envInfo.runtime === 'DEVIN_CLOUD' && hasActiveMission) {
       const wd = getWatchdogStatus(workdir);
       if (!wd.running) {
         startWatchdogDaemon(workdir, cliScriptPath, 30, 10, true);
@@ -104,7 +105,9 @@ async function main() {
     }
     const msg =
       envInfo.runtime === 'DEVIN_CLOUD'
-        ? `[TEAMWORK RUNTIME: DEVIN_CLOUD | 30m WATCH_DOG ACTIVE] Execute .agents/teamwork/workflow.py (--mode full|quick|survey|gate) or Managed Devins + devin_schedule_manage (*/20 * * * *).`
+        ? hasActiveMission
+          ? `[TEAMWORK RUNTIME: DEVIN_CLOUD | 30m WATCH_DOG ACTIVE] Execute .agents/teamwork/workflow.py (--mode full|quick|survey|gate) or Managed Devins + devin_schedule_manage (*/20 * * * *).`
+          : `[TEAMWORK RUNTIME: DEVIN_CLOUD | STANDBY (run teamwork-cli.mjs init to activate 30m WATCH_DOG)] Use /team-craft or /team-run to start a mission.`
         : `[TEAMWORK RUNTIME: ${adapter === 'antigravity' ? 'ANTIGRAVITY' : 'DEVIN_CLI_LOCAL'}] Active orchestrator: ${getActiveOrchestrator(workdir).id}. HASP guardrails & Skill-BOM active.`;
 
     const out = formatHookOutput({

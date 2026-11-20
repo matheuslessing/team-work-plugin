@@ -1,30 +1,56 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import {
+  EDIT_TOOLS,
+  EXEC_TOOLS,
+  extractCommand,
+  extractPathsFromCommand,
+  extractTargetPath,
+  isMutatingShellCommand
+} from '../scripts/core/hasp-runner.mjs';
 import { validateHandoff } from '../scripts/core/validator.mjs';
 import { getActiveOrchestrator, getTeamworkRoot } from '../scripts/lib/state-machine.mjs';
 
 export const meta = {
   id: 'pf-handoff-completeness',
-  version: '1.0.0',
+  version: '1.1.0',
   events: ['PostToolUse', 'Stop']
 };
 
-const EDIT_TOOLS = new Set(['edit', 'write_file', 'edit_file', 'Write', 'Edit']);
-
-function extractTargetPath(action) {
-  const args = action?.args || {};
-  return args.path || args.Path || args.file_path || args.filePath || args.target || '';
+function getTargetHandoffFiles(workdir, action) {
+  const tool = action?.tool || '';
+  if (EDIT_TOOLS.has(tool)) {
+    const target = extractTargetPath(action);
+    if (path.basename(target).toLowerCase() !== 'handoff.md') return [];
+    const fullPath = path.resolve(workdir, target);
+    return fs.existsSync(fullPath) ? [{ target, fullPath }] : [];
+  }
+  if (EXEC_TOOLS.has(tool)) {
+    const cmd = extractCommand(action);
+    if (!isMutatingShellCommand(cmd)) return [];
+    const matches = extractPathsFromCommand(cmd, /(?:[A-Za-z]:)?[A-Za-z0-9_./\\-]*handoff\.md/gi);
+    const out = [];
+    const seen = new Set();
+    for (const target of matches) {
+      if (path.basename(target).toLowerCase() !== 'handoff.md') continue;
+      const fullPath = path.resolve(workdir, target);
+      if (fs.existsSync(fullPath) && !seen.has(fullPath)) {
+        seen.add(fullPath);
+        out.push({ target, fullPath });
+      }
+    }
+    return out;
+  }
+  return [];
 }
 
 export function should_activate(state, action) {
+  const workdir = path.resolve(state.workdir || process.cwd());
   if (action?.event === 'Stop') {
-    const twRoot = getTeamworkRoot(state.workdir || process.cwd());
+    const twRoot = getTeamworkRoot(workdir);
     return fs.existsSync(twRoot);
   }
-  if (EDIT_TOOLS.has(action?.tool || '')) {
-    return path.basename(extractTargetPath(action)).toLowerCase() === 'handoff.md';
-  }
-  return false;
+  return getTargetHandoffFiles(workdir, action).length > 0;
 }
 
 export function intervene(state, action) {
@@ -69,17 +95,25 @@ export function intervene(state, action) {
   }
 
   // PostToolUse on handoff.md
-  const fullPath = path.resolve(workdir, extractTargetPath(action));
-  if (!fs.existsSync(fullPath)) return { type: 'NOOP' };
-  const res = validateHandoff(fullPath, fs.readFileSync(fullPath, 'utf8'), {
-    checkFiles: true,
-    workspaceRoot: workdir
-  });
-  if (!res.ok) {
+  const files = getTargetHandoffFiles(workdir, action);
+  if (files.length === 0) return { type: 'NOOP' };
+  const allErrors = [];
+  const badTargets = [];
+  for (const { target, fullPath } of files) {
+    const res = validateHandoff(fullPath, fs.readFileSync(fullPath, 'utf8'), {
+      checkFiles: true,
+      workspaceRoot: workdir
+    });
+    if (!res.ok) {
+      badTargets.push(target);
+      allErrors.push(...res.errors);
+    }
+  }
+  if (allErrors.length > 0) {
     return {
       type: 'INJECT_CONTEXT',
-      reason: `Handoff ${extractTargetPath(action)} is incomplete`,
-      payload: `[HASP:pf-handoff-completeness] Missing/invalid handoff requirements:\n- ${res.errors.join('\n- ')}`
+      reason: `Handoff ${badTargets.join(', ')} is incomplete`,
+      payload: `[HASP:pf-handoff-completeness] Missing/invalid handoff requirements:\n- ${allErrors.join('\n- ')}`
     };
   }
   return { type: 'NOOP' };

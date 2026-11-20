@@ -6,7 +6,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { parseFrontmatter } from '../packages/core/frontmatter.mjs';
 import { scanPromptSecurity } from '../packages/core/security-scanner.mjs';
-import { auditSkills, recordTelemetry, scaffoldSkill, triageSkills } from '../plugins/harness-forge/scripts/lib/skillops.mjs';
+import { auditSkills, buildEcosystemGraph, recordTelemetry, scaffoldSkill, triageSkills } from '../plugins/harness-forge/scripts/lib/skillops.mjs';
 import { runSkillUseEval } from '../plugins/harness-forge/scripts/lib/skill-use-eval.mjs';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..');
@@ -70,6 +70,8 @@ import workflow
 async def main():
     calls = []
     async def mock_agent(prompt, **kwargs):
+        assert 'model' not in kwargs, f"workflow.py must use mode= not model=: {kwargs}"
+        assert kwargs.get('mode') in (None, 'normal', 'fast', 'lite', 'ultra', 'fusion'), f"invalid mode: {kwargs}"
         label = kwargs.get('label', '')
         calls.append(label)
         if 'explorer' in label:
@@ -174,6 +176,21 @@ test('Deterministic skill triage routes all 5 outcomes and SkillOps detects high
     });
     const tClean = triageSkills({ workspaceRoot: tmp });
     assert.equal(tClean.action, 'CLEAN');
+
+    // 5b. CRLF vs LF normalization + strict mode failure on unversioned edit
+    const cleanSkillMd = path.join(tmp, '.agents', 'skills', 'clean-skill', 'SKILL.md');
+    const originalSkillText = fs.readFileSync(cleanSkillMd, 'utf8').replace(/\r\n/g, '\n');
+    fs.writeFileSync(cleanSkillMd, originalSkillText.replace(/\n/g, '\r\n'), 'utf8');
+    buildEcosystemGraph(path.join(tmp, '.agents', 'skills'), { write: true });
+    fs.writeFileSync(cleanSkillMd, originalSkillText, 'utf8');
+    const auditCrossOs = auditSkills(path.join(tmp, '.agents', 'skills'), { strict: true });
+    assert.equal(auditCrossOs.ok, true, `LF vs CRLF hash mismatch: ${auditCrossOs.warnings.join('; ')}`);
+
+    fs.writeFileSync(cleanSkillMd, `${originalSkillText}\n<!-- silent edit -->\n`, 'utf8');
+    const auditSilent = auditSkills(path.join(tmp, '.agents', 'skills'), { strict: true });
+    assert.equal(auditSilent.ok, false, 'skillops audit --strict must fail on silent edit warnings');
+    assert.ok(auditSilent.warnings.some((w) => /Silent modification detected/i.test(w)));
+    fs.writeFileSync(cleanSkillMd, originalSkillText, 'utf8');
 
     // 6. EVAL_EVOLVE when skill-bom.json exists alongside valid skills
     fs.mkdirSync(path.join(tmp, '.agents', 'teamwork'), { recursive: true });

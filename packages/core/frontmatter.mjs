@@ -19,8 +19,16 @@ export function estimateTokens(text) {
   return Math.max(1, Math.ceil(len / 4));
 }
 
+export function normalizeLineEndings(text) {
+  return String(text || '').replace(/\r\n/g, '\n');
+}
+
 export function sha256Hex(content) {
   return crypto.createHash('sha256').update(content, 'utf8').digest('hex');
+}
+
+export function sha256Text(content) {
+  return sha256Hex(normalizeLineEndings(content));
 }
 
 function parseScalar(raw) {
@@ -30,8 +38,15 @@ function parseScalar(raw) {
   if (s === 'false') return false;
   if (/^-?\d+$/.test(s)) return Number(s);
   if (/^-?\d+\.\d+$/.test(s)) return Number(s);
-  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
-    return s.slice(1, -1);
+  if (s.startsWith('"') && s.endsWith('"')) {
+    try {
+      return JSON.parse(s);
+    } catch {
+      return s.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+    }
+  }
+  if (s.startsWith("'") && s.endsWith("'")) {
+    return s.slice(1, -1).replace(/''/g, "'");
   }
   if (s.startsWith('[') && s.endsWith(']')) {
     const inner = s.slice(1, -1).trim();

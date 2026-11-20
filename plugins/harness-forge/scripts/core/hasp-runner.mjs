@@ -3,6 +3,39 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { normalizePosix, sha256Hex } from './frontmatter.mjs';
 
+export const EDIT_TOOLS = new Set(['edit', 'write_file', 'edit_file', 'Write', 'Edit']);
+export const EXEC_TOOLS = new Set(['exec', 'run_command', 'Bash', 'shell']);
+
+export function extractTargetPath(action) {
+  const args = action?.args || {};
+  return args.path || args.Path || args.file_path || args.filePath || args.target || '';
+}
+
+export function extractCommand(action) {
+  const args = action?.args || {};
+  return args.CommandLine || args.command || args.cmd || '';
+}
+
+export function isMutatingShellCommand(cmd) {
+  const str = String(cmd || '');
+  if (!str.trim()) return false;
+  if (/(?:^|[^-\d&=<>])>>?\s*(?!&)\S/.test(str)) return true;
+  return /\b(?:tee|sed\s+-i|perl\s+-[^\s]*i|rm\s+|mv\s+|cp\s+|truncate|dd\s+|writeFileSync|writeFile|appendFileSync|appendFile|write_text|write_bytes|json\.dump|open\([^)]*['"][wax+])/i.test(
+    str
+  );
+}
+
+export function extractPathsFromCommand(cmd, pathRegex) {
+  const str = String(cmd || '');
+  const flags = pathRegex.flags.includes('g') ? pathRegex.flags : `${pathRegex.flags}g`;
+  const re = new RegExp(pathRegex.source, flags);
+  const matches = str.match(re) || [];
+  const cleaned = matches
+    .map((m) => m.replace(/^['"]+|['";),]+$/g, '').trim())
+    .filter(Boolean);
+  return [...new Set(cleaned)];
+}
+
 const PRIORITY = {
   NOOP: 0,
   ALLOW: 1,
