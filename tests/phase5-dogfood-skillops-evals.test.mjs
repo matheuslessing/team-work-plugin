@@ -101,7 +101,7 @@ async def main():
 
 asyncio.run(main())
 `;
-  const out = execFileSync('python', ['-c', pyScript], { encoding: 'utf8' });
+  const out = execFileSync('python', ['-B', '-c', pyScript], { encoding: 'utf8' });
   const parsed = JSON.parse(out.trim().split(/\r?\n/).pop());
   assert.equal(parsed.result.status, 'GATE_FAILED_EXHAUSTED');
   assert.equal(parsed.calls.includes('victory-auditor'), false, 'victory-auditor MUST NOT run when Gate fails');
@@ -208,4 +208,62 @@ test('Deterministic skill triage routes all 5 outcomes and SkillOps detects high
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
+});
+
+test('Wave 2 & 3 regression: workflow.py REJECT handling, empty PASS prevention, victory_auditor failure rejection, 23-scenario evals', async () => {
+  const pyScript = `
+import asyncio, json, os, sys, tempfile
+sys.path.insert(0, os.path.abspath("plugins/teamwork/skills/team-cloud-workflow"))
+import workflow
+
+with tempfile.TemporaryDirectory() as tmp:
+    empty_ok, empty_defects = workflow.write_gate_status_md(1, [], tmp)
+    rej_ok, rej_defects = workflow.write_gate_status_md(
+        2,
+        [{"agent_id": "ch_1", "verdict": "REJECT", "defects": ["clean build missing"]}],
+        tmp,
+    )
+
+    async def fake_agent(prompt, phase="", schema=None, label="", mode="normal"):
+        if label == "synthesize-project-md":
+            return {"project_md_written": True, "milestones": [{"id": "m1", "scope": "core", "owned_files": ["src/a.js"]}]}
+        if label.startswith("reviewer-"):
+            return {"agent_id": "rev", "verdict": "APPROVE", "defects": [], "handoff_path": "r.md"}
+        if label.startswith("challenger-"):
+            return {"agent_id": "ch", "verdict": "APPROVE", "defects": [], "handoff_path": "c.md"}
+        if label.startswith("forensic-auditor-"):
+            return {"agent_id": "aud", "verdict": "CLEAN", "defects": [], "handoff_path": "a.md"}
+        if label == "victory-auditor":
+            return {"agent_id": "victory_auditor", "verdict": "REQUEST_CHANGES", "defects": ["Missing checkbox"], "handoff_path": "v.md"}
+        return {"domain": "core", "root_causes": [], "interface_contracts": [], "owned_files": ["src/a.js"], "agent_id": label, "handoff_path": "h.md", "compile_errors": 0, "summary": "ok"}
+
+    async def fake_parallel(callables):
+        return await asyncio.gather(*[c() for c in callables])
+
+    old_cwd = os.getcwd()
+    os.chdir(tmp)
+    try:
+        res = asyncio.run(workflow.execute_full_workflow(agent_fn=fake_agent, parallel_fn=fake_parallel))
+    finally:
+        os.chdir(old_cwd)
+
+    print(json.dumps({
+        "empty_ok": empty_ok,
+        "rej_ok": rej_ok,
+        "victory_status": res["status"]
+    }))
+`;
+  const out = execFileSync('python', ['-B', '-c', pyScript], { encoding: 'utf8' });
+  const lastJsonLine = out.trim().split(/\r?\n/).filter(Boolean).pop();
+  const parsed = JSON.parse(lastJsonLine);
+  assert.equal(parsed.empty_ok, false);
+  assert.equal(parsed.rej_ok, false);
+  assert.equal(parsed.victory_status, 'VICTORY_AUDIT_FAILED');
+
+  const evalRes = await runSkillUseEval('tests/evals/skill-use', process.cwd());
+  assert.equal(evalRes.total_scenarios, 23);
+  assert.ok(evalRes.metrics.su_score >= 0.90, `SU score too low: ${evalRes.metrics.su_score}`);
+  const abstains = evalRes.scenarios.filter((s) => s.expected_skill === null);
+  assert.equal(abstains.length, 3);
+  assert.ok(abstains.every((a) => a.trigger === 1 && a.triggered_skill === null));
 });

@@ -322,7 +322,8 @@ async function scenario4LegacyRepoMcpGitHookDrift(tmpRoot, plugins) {
     const initRes = await clClient.request('initialize', { protocolVersion: '2024-11-05', capabilities: {} });
     assert.ok(initRes.result?.serverInfo?.name);
     const listRes = await clClient.request('tools/list', {});
-    assert.equal(listRes.result.tools.length, 13, 'full MCP mode must expose 13 tools');
+    assert.equal(listRes.result.tools.length, 14, 'full MCP mode must expose 14 tools');
+    assert.ok(listRes.result.tools.some((t) => t.name === 'memory_promote'), 'full MCP mode must expose memory_promote');
 
     const upRes = await clClient.request('tools/call', {
       name: 'memory_upsert',
@@ -395,7 +396,7 @@ async function scenario4LegacyRepoMcpGitHookDrift(tmpRoot, plugins) {
   const driftJson = JSON.parse(driftRes.stdout);
   assert.ok(driftJson.staleCount >= 1);
 
-  return { tools: 13, staleCount: driftJson.staleCount };
+  return { tools: 14, staleCount: driftJson.staleCount };
 }
 
 function scenario5RealHaspHooks(tmpRoot, plugins) {
@@ -496,7 +497,7 @@ function scenario5RealHaspHooks(tmpRoot, plugins) {
       input: JSON.stringify({ toolCall: { name: 'write_file', args: { Path: 'tests/bad.test.mjs' } } })
     }).stdout
   );
-  assert.deepEqual(postAgy, {});
+  assert.match(postAgy.injectSteps?.[0]?.systemMessage?.systemMessage || '', /pf-anti-cheat-test/);
 
   // 4. PostCompaction compact digest <= 2000 chars
   const pcDevin = JSON.parse(runNode(plugins.twHooks, ['PostCompaction', '--workdir', repo, '--adapter', 'devin'], { input: '{}' }).stdout);
@@ -631,8 +632,8 @@ async function scenario7EnterpriseCoexistence(tmpRoot, plugins) {
     const toolNames = listRes.result.tools.map((t) => t.name).sort();
     assert.deepEqual(
       toolNames,
-      ['memory_drift', 'memory_rebuild_index', 'memory_record_adr', 'memory_retire', 'memory_upsert', 'skill_scaffold', 'skill_validate'],
-      'validator-only mode must hide read-only rcjson query tools and expose the 7 validated write/drift/validator tools'
+      ['memory_drift', 'memory_promote', 'memory_rebuild_index', 'memory_record_adr', 'memory_retire', 'memory_upsert', 'skill_scaffold', 'skill_validate'],
+      'validator-only mode must hide read-only rcjson query tools and expose the 8 validated write/drift/validator tools'
     );
 
     const blockedRead = await valClient.request('tools/call', {
@@ -680,15 +681,16 @@ async function scenario7EnterpriseCoexistence(tmpRoot, plugins) {
   assert.equal(JSON.parse(blockRc.stdout).decision, 'block');
   assert.match(blockRc.stderr, /pf-rcjson-readonly/);
 
-  return { validatorOnlyTools: 7, externalKbProtected: true };
+  return { validatorOnlyTools: 8, externalKbProtected: true };
 }
 
 async function main() {
+  const skipCli = process.argv.includes('--skip-cli');
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'teamwork-real-env-'));
   const summary = {};
   try {
-    summary.scenario1_real_devin = await scenario1RealDevinCli(tmpRoot);
-    summary.scenario2_real_agy = await scenario2RealAgyCli(tmpRoot);
+    summary.scenario1_real_devin = skipCli ? { skipped: true } : await scenario1RealDevinCli(tmpRoot);
+    summary.scenario2_real_agy = skipCli ? { skipped: true } : await scenario2RealAgyCli(tmpRoot);
     const plugins = scenario3IsolatePlugins(tmpRoot);
     summary.scenario3_isolation = { isolatedDir: plugins.twDir };
     summary.scenario4_legacy_mcp_githook_drift = await scenario4LegacyRepoMcpGitHookDrift(tmpRoot, plugins);
@@ -696,7 +698,7 @@ async function main() {
     summary.scenario6_teamwork_lifecycle = await scenario6FullTeamworkLifecycle(tmpRoot, plugins);
     summary.scenario7_enterprise_coexistence = await scenario7EnterpriseCoexistence(tmpRoot, plugins);
 
-    console.log(JSON.stringify({ ok: true, scenarios_passed: 7, summary }, null, 2));
+    console.log(JSON.stringify({ ok: true, scenarios_passed: skipCli ? 5 : 7, cli_skipped: skipCli, summary }, null, 2));
   } finally {
     fs.rmSync(tmpRoot, { recursive: true, force: true });
   }

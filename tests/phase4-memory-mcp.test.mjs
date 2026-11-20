@@ -141,11 +141,12 @@ test('Embedded stdio MCP server enforces schema + real disk refs, auto-compiles 
     const resps = await callMcpSession(requests, { FORGE_MCP_MODE: 'full' });
     const byId = new Map(resps.map((r) => [r.id, r]));
 
-    // Tools list has 13 tools in full mode (includes skill_triage)
+    // Tools list has 14 tools in full mode (includes memory_promote & skill_triage)
     const fullTools = byId.get(2).result.tools.map((t) => t.name);
-    assert.equal(fullTools.length, 13);
+    assert.equal(fullTools.length, 14);
     assert.ok(fullTools.includes('memory_index'));
     assert.ok(fullTools.includes('memory_upsert'));
+    assert.ok(fullTools.includes('memory_promote'));
     assert.ok(fullTools.includes('skill_triage'));
 
     // Security check: MCP memory_upsert rejects hidden zero-width Unicode and remote pipe exec
@@ -297,5 +298,124 @@ test('HASP Barreira 2 & 3 block direct edits to memory.rc.json and invalid .memo
     assert.match(badMemWrite.stdout, /pf-memory-guard/);
   } finally {
     fs.rmSync(tmpProject, { recursive: true, force: true });
+  }
+});
+
+test('Wave 2 regression: BM25 prototype safety, atomic recordAdr, strict validate warnings, MCP Content-Type + -32700 recovery + memory_promote', async () => {
+  const { initMemory, recordAdr, searchMemory, upsertMemoryDoc } = await import(
+    '../plugins/harness-forge/scripts/lib/memory-engine.mjs'
+  );
+  const { scaffoldSkill } = await import('../plugins/harness-forge/scripts/lib/skillops.mjs');
+
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hf-reg-p4-'));
+  try {
+    fs.mkdirSync(path.join(tmp, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'src', 'app.js'), 'export function boot() { return true; }\n', 'utf8');
+    await initMemory(tmp);
+    await upsertMemoryDoc(tmp, {
+      id: 'arch-boot',
+      kind: 'architecture',
+      summary: 'Bootstraps application service cleanly.',
+      tags: ['boot'],
+      source_refs: [{ path: 'src/app.js', symbols: ['boot'] }],
+      body: '# Boot\n\n## Init\n`boot()` initializes the app.\n'
+    });
+
+    const protoHits = await searchMemory(tmp, 'constructor toString __proto__ hasOwnProperty');
+    assert.deepEqual(protoHits, []);
+    assert.ok(protoHits.every((h) => Number.isFinite(h.score)));
+
+    const adr1 = await recordAdr(tmp, {
+      title: 'ADR One',
+      context: 'Initial architecture choice.',
+      decision: 'Use deterministic JSON index.',
+      consequences: 'Zero native deps.',
+      source_refs: [{ path: 'src/app.js', symbols: ['boot'] }]
+    });
+    await assert.rejects(
+      () =>
+        recordAdr(tmp, {
+          title: 'ADR Two Broken',
+          context: 'Replace ADR One.',
+          decision: 'Switch storage.',
+          consequences: 'Broken ref.',
+          supersedes: adr1.id,
+          source_refs: [{ path: 'src/does-not-exist.js' }]
+        }),
+      /does not exist/
+    );
+    const adr1Content = fs.readFileSync(path.join(tmp, '.memory', 'decisions', `${adr1.id}.md`), 'utf8');
+    assert.match(adr1Content, /^status:\s*active$/m);
+
+    // Strict CLI validate exits non-zero when skill emits warnings (e.g. >220 lines bloat)
+    const longBody = Array.from({ length: 230 }, (_, i) => `Line ${i + 1} of bloated skill instructions.`).join('\n');
+    scaffoldSkill(path.join(tmp, '.agents', 'skills'), {
+      name: 'bloated-skill',
+      description: 'Validates warning propagation in strict mode.',
+      body: `# bloated-skill\n\n${longBody}\n`
+    });
+    const strictRes = spawnSync(
+      process.execPath,
+      [path.resolve('plugins/harness-forge/scripts/forge-cli.mjs'), 'validate', '--workdir', tmp, '--strict'],
+      { encoding: 'utf8' }
+    );
+    assert.equal(strictRes.status, 2);
+    const strictJson = JSON.parse(strictRes.stdout);
+    assert.equal(strictJson.ok, false);
+    assert.ok(strictJson.warnings.length > 0 && strictJson.errors.some((e) => /\[STRICT WARNING\]/.test(e)));
+
+    // Prepare DEAD_ENDS.md to test MCP memory_promote + Content-Type framing + malformed JSON -32700 recovery
+    const dePath = path.join(tmp, '.agents', 'teamwork', 'orchestrator_1', 'DEAD_ENDS.md');
+    fs.mkdirSync(path.dirname(dePath), { recursive: true });
+    fs.writeFileSync(
+      dePath,
+      '# DEAD ENDS\n\n| Iteration | Approach Tried | Why It Failed | Files Touched |\n| 1 | Bypassing cache rebuild | Stale rc matrix | src/app.js |\n',
+      'utf8'
+    );
+
+    const srv = spawn(process.execPath, [path.resolve('plugins/harness-forge/mcp-server/server.mjs')], {
+      env: { ...process.env, FORGE_MCP_MODE: 'full' },
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+    let outBuf = Buffer.alloc(0);
+    const replies = [];
+    srv.stdout.on('data', (chunk) => {
+      outBuf = Buffer.concat([outBuf, chunk]);
+      while (true) {
+        const idx = outBuf.indexOf('\r\n\r\n');
+        if (idx === -1) break;
+        const hdr = outBuf.slice(0, idx).toString('utf8');
+        const m = hdr.match(/Content-Length:\s*(\d+)/i);
+        if (!m) break;
+        const len = Number(m[1]);
+        if (outBuf.length < idx + 4 + len) break;
+        const body = outBuf.slice(idx + 4, idx + 4 + len).toString('utf8');
+        outBuf = outBuf.slice(idx + 4 + len);
+        replies.push(JSON.parse(body));
+      }
+    });
+
+    const frame = (raw) => `Content-Type: application/vscode-jsonrpc; charset=utf-8\r\nContent-Length: ${Buffer.byteLength(raw, 'utf8')}\r\n\r\n${raw}`;
+    srv.stdin.write(frame(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26', capabilities: {} } })));
+    srv.stdin.write(`Content-Length: 10\r\n\r\n{bad json!`);
+    srv.stdin.write(frame(JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'resources/list', params: {} })));
+    srv.stdin.write(frame(JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'memory_promote', arguments: { project_dir: tmp } } })));
+    srv.stdin.write(frame(JSON.stringify({ jsonrpc: '2.0', id: 4, method: 'tools/list', params: {} })));
+    srv.stdin.end();
+
+    await new Promise((resolve) => srv.once('exit', resolve));
+    const initReply = replies.find((r) => r.id === 1);
+    assert.equal(initReply.result.protocolVersion, '2025-03-26');
+    const parseErrReply = replies.find((r) => r.error && r.error.code === -32700);
+    assert.ok(parseErrReply, 'Malformed JSON must return -32700 without deadlocking stream');
+    const resListReply = replies.find((r) => r.id === 2);
+    assert.deepEqual(resListReply.result, { resources: [] });
+    const promoteReply = replies.find((r) => r.id === 3);
+    assert.equal(promoteReply.result.isError, false);
+    assert.deepEqual(JSON.parse(promoteReply.result.content[0].text).promoted, ['gotcha-bypassing-cache-rebuild']);
+    const listReply = replies.find((r) => r.id === 4);
+    assert.equal(listReply.result.tools.length, 14);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
   }
 });

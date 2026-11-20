@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "$schema": "../../scripts/core/schemas/skill-contract.v1.json",
   "name": "team-audit",
   "version": "2.0.0",
   "description": "Standalone Binary Forensic Integrity Audit (CLEAN vs INTEGRITY VIOLATION) catching tautological tests, mocks, skips, stubs, and facade runners.",

@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "$schema": "../../scripts/core/schemas/skill-contract.v1.json",
   "name": "forge-skillops",
   "version": "1.0.0",
   "description": "Build Skill Ecosystem Graph (5 edge types), detect skill technical debt/redundancy, and execute library-time maintenance without extra LLM calls.",
@@ -22,8 +22,8 @@
     { "cmd": "node ${PLUGIN_ROOT}/scripts/forge-cli.mjs skillops audit --skills-dir .agents/skills --strict" }
   ],
   "F_failure_modes": [
-    { "code": "SKILL_REDUNDANCY", "action": "RECOMMEND_MERGE", "route_to": "forge:skill-migrator" },
-    { "code": "BROKEN_EDGE", "action": "RECOMMEND_REPAIR", "route_to": "forge:skill-migrator" }
+    { "code": "SKILL_REDUNDANCY", "action": "RECOMMEND_MERGE", "route_to": "harness-forge:skill-migrator" },
+    { "code": "BROKEN_EDGE", "action": "RECOMMEND_REPAIR", "route_to": "harness-forge:skill-migrator" }
   ],
   "ecosystem_edges": {
     "depends_on": [],

@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "$schema": "../../scripts/core/schemas/skill-contract.v1.json",
   "name": "team-status",
   "version": "2.0.0",
   "description": "Render live outcome Threads, Attention queue, Skill-BOM summary, and Gate status from view.json and state.json.",

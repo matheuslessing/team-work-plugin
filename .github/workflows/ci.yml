@@ -1,0 +1,53 @@
+name: Teamwork Suite CI
+
+on:
+  push:
+    branches: [main, "fix/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check core bundle sync
+        run: npm run sync-core:check
+
+      - name: Run unit & integration test suite
+        run: npm test
+
+      - name: Audit teamwork skills strictly
+        run: node plugins/harness-forge/scripts/forge-cli.mjs skillops audit --skills-dir plugins/teamwork/skills --strict
+
+      - name: Audit harness-forge skills strictly
+        run: node plugins/harness-forge/scripts/forge-cli.mjs skillops audit --skills-dir plugins/harness-forge/skills --strict
+
+      - name: Run Skill-Use benchmark suite (20 skills + 3 abstain)
+        run: npm run eval:skills
+
+      - name: Forensic integrity self-scan
+        run: node plugins/teamwork/scripts/teamwork-cli.mjs scan-integrity --workdir . --strict
+
+      - name: Validate Devin Cloud workflow.py
+        run: python -B plugins/teamwork/skills/team-cloud-workflow/workflow.py --check
+
+      - name: Run real-environment validation (CI mode)
+        run: npm run validate:ci
+
+      - name: Build Antigravity bundles into temp directory
+        run: |
+          node -e "const os=require('os'),path=require('path'),fs=require('fs'),cp=require('child_process');const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'agy-ci-'));try{cp.execFileSync(process.execPath,['scripts/build-antigravity.mjs','--out',tmp],{stdio:'inherit'});}finally{fs.rmSync(tmp,{recursive:true,force:true});}"

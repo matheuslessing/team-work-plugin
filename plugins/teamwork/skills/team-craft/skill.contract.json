@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "$schema": "../../scripts/core/schemas/skill-contract.v1.json",
   "name": "team-craft",
   "version": "2.0.0",
   "description": "Interactive 9-step prompt crafting with Complexity Router (Solo / Quick / Full Dual-Track) producing ORIGINAL_REQUEST.md and delegating cleanly.",

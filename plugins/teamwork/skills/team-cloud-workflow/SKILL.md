@@ -25,7 +25,7 @@ Runs deterministic parallel orchestration in **Devin Cloud** (`.agents/teamwork/
 ## Commands
 ```bash
 node "${PLUGIN_ROOT}/scripts/teamwork-cli.mjs" detect-env --workdir . --provision-workflow
-python .agents/teamwork/workflow.py --check
-python .agents/teamwork/workflow.py --mode full
+python -B .agents/teamwork/workflow.py --check
+python -B .agents/teamwork/workflow.py --mode full
 ```
 If the Dynamic Workflow runner is unavailable, dispatch Managed Devins (`devin_session_create` + `devin_session_gather` + `devin_schedule_manage` `*/20 * * * *`).

@@ -22,7 +22,7 @@ Convert any legacy `SKILL.md` or ad-hoc markdown instruction file into the Skill
    ```bash
    node "${PLUGIN_ROOT}/scripts/forge-cli.mjs" skill analyze-legacy <legacy_path>
    ```
-2. Spawn `forge:skill-migrator` (or apply directly):
+2. Spawn `harness-forge:skill-migrator` (or apply directly):
    - Extract oversized details (> 220 lines) into `<target>/<name>/references/`.
    - Synthesize `skill.contract.json` (`P_preconditions`, `O_operation` authority profile, `A_artifacts`, `V_validators`, `F_failure_modes`, `ecosystem_edges`).
    - Convert brittle "remember to check X" prose warnings into deterministic `.pf.mjs` Program Functions when recurring failure risks exist.

@@ -1,7 +1,7 @@
 # Handoff Report: <Agent ID> (<Milestone / Scope>)
 
 **Agent:** `<agent_id>`  
-**Archetype:** `<explorer | test_writer | implementer | reviewer_critic | critic | forensic_auditor | victory_auditor>`  
+**Archetype:** `<explorer | test-writer | worker | reviewer | challenger | forensic-auditor | victory-auditor>`  
 **Working Directory:** `.agents/teamwork/<agent_id>`  
 **Verdict (if Gate Agent):** `<APPROVE | REQUEST_CHANGES | 🟢 CLEAN | 🔴 INTEGRITY VIOLATION | REJECT>`
 

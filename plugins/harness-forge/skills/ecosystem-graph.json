@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-11-20T00:50:08.700Z",
-  "skills_dir": "C:/Users/Matheus/Documents/team-plugin/plugins/harness-forge/skills",
+  "generated_at": "2026-11-20T18:23:27.652Z",
+  "skills_dir": "skills",
   "nodes": [
     {
       "id": "forge-drift",
@@ -13,8 +13,8 @@
         "pf-memory-guard"
       ],
       "line_count": 26,
-      "token_estimate": 249,
-      "content_sha256": "45baa6b53c94c418e09daf92b4323f074c64c1a1ac157d3258be3067d833359e",
+      "token_estimate": 251,
+      "content_sha256": "34b3497c0ca128e2425734971d85cb9f13eb0fff669c390454f22b7d239360e6",
       "valid": true
     },
     {
@@ -28,8 +28,8 @@
         "pf-skill-contract-guard"
       ],
       "line_count": 35,
-      "token_estimate": 382,
-      "content_sha256": "39de1456e67ad65e16e891de7bb900772d5504ac5f9e70094a5a8f4eaf85804c",
+      "token_estimate": 384,
+      "content_sha256": "b061791e8a911bb77014a17f98aae5b950d25216c1e566f58b9e8e0db03b9602",
       "valid": true
     },
     {
@@ -43,8 +43,8 @@
         "pf-memory-guard"
       ],
       "line_count": 29,
-      "token_estimate": 347,
-      "content_sha256": "d224f3875e8a25d59ea80154f1aa78b389b1f047e83f8cf7162d7815454243d0",
+      "token_estimate": 350,
+      "content_sha256": "94116518b88b613eecfedd0cdc9a86ef2699fc38ade78a8d9dd54375206db2b8",
       "valid": true
     },
     {
@@ -58,8 +58,8 @@
         "pf-memory-guard"
       ],
       "line_count": 33,
-      "token_estimate": 350,
-      "content_sha256": "72ababee0bd60949ae7d0bd9a45ed7a104e7611827dbc078dc9aeac41b79212e",
+      "token_estimate": 352,
+      "content_sha256": "18dceeddf18e8cdf4ab993fcbfa060eab315d3b49cc4962b98e8c1a54fe6f0a7",
       "valid": true
     },
     {
@@ -72,8 +72,8 @@
         "pf-skill-contract-guard"
       ],
       "line_count": 34,
-      "token_estimate": 372,
-      "content_sha256": "8d73b9ef5be75f1983842fa620706749471f9e93d31f9969827fd553d2839b70",
+      "token_estimate": 374,
+      "content_sha256": "6778467a1ce1e07cf684c95b2f74be22d3cac58f07b28b17dde5cdb8e72cd13b",
       "valid": true
     },
     {
@@ -87,7 +87,7 @@
       ],
       "line_count": 48,
       "token_estimate": 482,
-      "content_sha256": "f73fa60edb82c578b6f902210aadb91d3ccb739f5a3c37ccbec57d648b3d7588",
+      "content_sha256": "8cc892fb159fcbda420c3f1ecadc873c3b01d3008ba36e4a36f7c2dd797ba550",
       "valid": true
     },
     {
@@ -100,8 +100,8 @@
         "pf-skill-contract-guard"
       ],
       "line_count": 34,
-      "token_estimate": 338,
-      "content_sha256": "a160f66785a520ddd9e7fff186c5c94cd48a78170e41f7779e42aa3e44afdd28",
+      "token_estimate": 339,
+      "content_sha256": "7cc006758cf16ae43a61c745b1524dc699e64c926ebda34c1495429f6ac1628d",
       "valid": true
     },
     {
@@ -117,7 +117,7 @@
       ],
       "line_count": 28,
       "token_estimate": 229,
-      "content_sha256": "7aabfee9b7e0f3ec5fbf58591a7c765ebf63d7af43161f7531a671a9dbd47aa1",
+      "content_sha256": "edd725ba10f0a81f0d3fd87e859531d2a3ae36e7a396741e4195e00435df805d",
       "valid": true
     }
   ],

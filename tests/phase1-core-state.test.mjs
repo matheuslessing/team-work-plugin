@@ -148,3 +148,146 @@ test('LTS state machine enforces transitions, contract freeze, and dynamic orche
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+test('Wave 1 & 2 regression: frontmatter scalars/BOM/blocks, Zod freezeContract, pinned detectEnvironment, REJECT gate', async () => {
+  const { createInitialState: initSt, saveState } = await import(
+    '../plugins/teamwork/scripts/lib/state-machine.mjs'
+  );
+  const {
+    detectEnvironment,
+    getWatchdogStatus,
+    isPidAlive,
+    persistRuntimeAndProvisionWorkflow,
+    stopWatchdogDaemon
+  } = await import('../plugins/teamwork/scripts/lib/runtime.mjs');
+  const { evaluateLatestGate } = await import('../packages/core/validator.mjs');
+
+  const bomFm =
+    '\uFEFF---\n' +
+    'id: arch-1\n' +
+    'version: "1.0"\n' +
+    'pad: "0042"\n' +
+    'flag: "true"\n' +
+    'summary: |\n' +
+    '  Multi-line\n' +
+    '  summary block\n' +
+    '---\n' +
+    '# Heading\n';
+  const parsed = parseFrontmatter(bomFm);
+  assert.equal(parsed.data.version, '1.0');
+  assert.equal(parsed.data.pad, '0042');
+  assert.equal(parsed.data.flag, 'true');
+  assert.ok(parsed.data.summary.includes('Multi-line'));
+
+  const rt = parseFrontmatter(
+    serializeFrontmatter({ id: 's', version: '1.0', zero: '007', boolStr: 'false' }, '# Body\n')
+  );
+  assert.equal(rt.data.version, '1.0');
+  assert.equal(rt.data.zero, '007');
+  assert.equal(rt.data.boolStr, 'false');
+
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tw-reg-p1-'));
+  try {
+    saveState(tmp, initSt(tmp));
+    const orchDir = path.join(tmp, '.agents', 'teamwork', 'orchestrator_1');
+    fs.mkdirSync(orchDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(orchDir, 'PROJECT.md'),
+      [
+        '# Project',
+        '',
+        '## Feature Inventory',
+        '- F1: Auth middleware',
+        '',
+        '## Interface Contracts',
+        '```ts',
+        'export function authenticate(token: string): boolean;',
+        '```',
+        'Zod schema validates payload at runtime without truncating at line-initial Zod.',
+        '',
+        '## Code Layout',
+        '- src/auth.ts'
+      ].join('\n'),
+      'utf8'
+    );
+    const frozen = freezeContract(tmp);
+    assert.equal(frozen.sha256.length, 64);
+    assert.equal(frozen.phase, 'CONTRACT_FROZEN');
+
+    fs.writeFileSync(
+      path.join(orchDir, 'PROJECT.md'),
+      [
+        '# Project',
+        '',
+        '## Feature Inventory',
+        '- F1: Auth middleware',
+        '',
+        '## Interface Contracts',
+        '```ts',
+        'export function authenticate(token: string): boolean;',
+        '```',
+        'Zod schema CHANGED validates payload at runtime without truncating at line-initial Zod.',
+        '',
+        '## Code Layout',
+        '- src/auth.ts'
+      ].join('\n'),
+      'utf8'
+    );
+    const frozenAfterZod = freezeContract(tmp);
+    assert.notEqual(frozenAfterZod.sha256, frozen.sha256);
+
+    const pinnedEnv = detectEnvironment(tmp, { explicitFlag: 'cloud' });
+    assert.equal(pinnedEnv.pinned, true);
+    persistRuntimeAndProvisionWorkflow(
+      tmp,
+      path.resolve('plugins/teamwork'),
+      path.resolve('plugins/teamwork/scripts/teamwork-cli.mjs'),
+      pinnedEnv,
+      { forceProvision: false, forceWatchdog: false }
+    );
+    const prevOverride = process.env.TEAMWORK_RUNTIME;
+    delete process.env.TEAMWORK_RUNTIME;
+    try {
+      const reloaded = detectEnvironment(tmp);
+      assert.equal(reloaded.runtime, 'DEVIN_CLOUD');
+      assert.equal(reloaded.pinned, true);
+    } finally {
+      if (prevOverride !== undefined) process.env.TEAMWORK_RUNTIME = prevOverride;
+    }
+
+    const agyEnv = detectEnvironment(tmp, { explicitFlag: 'antigravity' });
+    assert.equal(agyEnv.runtime, 'ANTIGRAVITY');
+    assert.equal(agyEnv.pinned, true);
+
+    const gateEval = evaluateLatestGate(
+      [
+        '# Gate Status',
+        '## Gate — Iteration 1',
+        '| Agent | Role | Verdict | Source |',
+        '| `challenger_1` | gate | **REJECT** | `h.md` |',
+        '',
+        '### Defects',
+        '- clean build check still missing error handling'
+      ].join('\n')
+    );
+    assert.equal(gateEval.passed, false);
+    assert.equal(gateEval.failed, true);
+  } finally {
+    try {
+      const wd = getWatchdogStatus(tmp);
+      stopWatchdogDaemon(tmp, true);
+      if (wd.pid) {
+        for (let i = 0; i < 40 && isPidAlive(wd.pid); i++) {
+          await new Promise((r) => setTimeout(r, 50));
+        }
+      }
+    } catch {
+      // ignore if not started
+    }
+    try {
+      fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    } catch {
+      // best effort
+    }
+  }
+});

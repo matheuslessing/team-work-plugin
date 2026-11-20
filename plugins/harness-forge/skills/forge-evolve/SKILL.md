@@ -25,7 +25,7 @@ Implements **Harnessing-Level Recursion** (*Harness²*) and **Verified Skill Lib
    node "${PLUGIN_ROOT}/scripts/forge-cli.mjs" memory promote --workdir .
    ```
 3. **Propose & Verify New Learned Skill / HASP PF**:
-   - Spawn `forge:harness-evolver` on an isolated branch (`teamwork/evolve`) to turn repeated dead ends into deterministic `.pf.mjs` guards or `.memory/skills-learned/<name>/` procedures.
+   - Spawn `harness-forge:harness-evolver` on an isolated branch (`teamwork/evolve`) to turn repeated dead ends into deterministic `.pf.mjs` guards or `.memory/skills-learned/<name>/` procedures.
 4. **Regression Gate (`Skill-Use` + `SkillOps`)**:
    ```bash
    node "${PLUGIN_ROOT}/scripts/forge-cli.mjs" skillops audit --skills-dir .agents/skills --strict

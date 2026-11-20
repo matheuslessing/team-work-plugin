@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "$schema": "../../scripts/core/schemas/skill-contract.v1.json",
   "name": "forge-evolve",
   "version": "1.0.0",
   "description": "Run Harness2 cross-task recursion and Voyager promotion: extract verified lessons into .memory/, propose HASP PFs, and gate with Skill-Use evals.",
@@ -22,7 +22,7 @@
     { "cmd": "node ${PLUGIN_ROOT}/scripts/forge-cli.mjs eval-skills --suite tests/evals/skill-use --min-score 0.90" }
   ],
   "F_failure_modes": [
-    { "code": "SKILL_USE_REGRESSION", "action": "REJECT_EVOLUTION", "route_to": "forge:harness-evolver" }
+    { "code": "SKILL_USE_REGRESSION", "action": "REJECT_EVOLUTION", "route_to": "harness-forge:harness-evolver" }
   ],
   "ecosystem_edges": {
     "depends_on": ["forge-skillops", "forge-memory"],

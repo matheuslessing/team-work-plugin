@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "$schema": "../../scripts/core/schemas/skill-contract.v1.json",
   "name": "team-contract-freeze",
   "version": "1.0.0",
   "description": "Validate and SHA-256 hash PROJECT.md Interface Contracts into state.json before parallel Track A & Track B execution.",

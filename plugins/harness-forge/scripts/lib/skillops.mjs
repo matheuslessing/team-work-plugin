@@ -43,9 +43,11 @@ export function buildEcosystemGraph(skillsDir, { write = false } = {}) {
     const name = res.meta?.name || path.basename(dir);
     const contract = res.meta?.contract || {};
     const desc = res.meta?.description || '';
-    const skillMdRaw = fs.existsSync(path.join(dir, 'SKILL.md')) ? fs.readFileSync(path.join(dir, 'SKILL.md'), 'utf8') : '';
+    const skillMdRaw = fs.existsSync(path.join(dir, 'SKILL.md'))
+      ? fs.readFileSync(path.join(dir, 'SKILL.md'), 'utf8').replace(/\r\n/g, '\n')
+      : '';
     const contractRaw = fs.existsSync(path.join(dir, 'skill.contract.json'))
-      ? fs.readFileSync(path.join(dir, 'skill.contract.json'), 'utf8')
+      ? fs.readFileSync(path.join(dir, 'skill.contract.json'), 'utf8').replace(/\r\n/g, '\n')
       : '';
     nodes.push({
       id: name,
@@ -95,15 +97,17 @@ export function buildEcosystemGraph(skillsDir, { write = false } = {}) {
   const graph = {
     schema_version: '1.0.0',
     generated_at: new Date().toISOString(),
-    skills_dir: normalizePosix(abs),
+    skills_dir: normalizePosix(path.relative(path.dirname(abs), abs)) || path.basename(abs) || 'skills',
     nodes,
     edges,
     candidate_redundancies: candidateRedundancies
   };
 
   if (write) {
+    fs.mkdirSync(abs, { recursive: true });
     const outPath = path.join(abs, 'ecosystem-graph.json');
-    const tmp = `${outPath}.${process.pid}.tmp`;
+    const rand = Math.random().toString(36).slice(2, 8);
+    const tmp = `${outPath}.${process.pid}.${Date.now()}.${rand}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(graph, null, 2), 'utf8');
     fs.renameSync(tmp, outPath);
   }
@@ -146,9 +150,11 @@ export function auditSkills(skillsDir, { strict = false, telemetryPath = null } 
     const contract = res.meta?.contract;
     const prevNode = baselineBySkill.get(name);
     if (prevNode?.content_sha256 && contract) {
-      const skillMdRaw = fs.existsSync(path.join(dir, 'SKILL.md')) ? fs.readFileSync(path.join(dir, 'SKILL.md'), 'utf8') : '';
+      const skillMdRaw = fs.existsSync(path.join(dir, 'SKILL.md'))
+        ? fs.readFileSync(path.join(dir, 'SKILL.md'), 'utf8').replace(/\r\n/g, '\n')
+        : '';
       const contractRaw = fs.existsSync(path.join(dir, 'skill.contract.json'))
-        ? fs.readFileSync(path.join(dir, 'skill.contract.json'), 'utf8')
+        ? fs.readFileSync(path.join(dir, 'skill.contract.json'), 'utf8').replace(/\r\n/g, '\n')
         : '';
       const currentSha = sha256Text(`${skillMdRaw}\n${contractRaw}`);
       if (currentSha !== prevNode.content_sha256 && prevNode.version === contract.version) {
@@ -221,7 +227,17 @@ export function auditSkills(skillsDir, { strict = false, telemetryPath = null } 
 export function resolveSkillTargetDir({ scope = 'project', target = '', workspaceRoot = process.cwd(), pluginRoot = '' }) {
   const root = path.resolve(workspaceRoot);
   if (target) {
-    return path.resolve(root, target);
+    const resolved = path.resolve(root, target);
+    if (
+      scope === 'plugin' &&
+      path.basename(resolved) !== 'skills' &&
+      (fs.existsSync(path.join(resolved, 'skills')) ||
+        fs.existsSync(path.join(resolved, '.devin', 'plugin.json')) ||
+        fs.existsSync(path.join(resolved, 'plugin.json')))
+    ) {
+      return path.join(resolved, 'skills');
+    }
+    return resolved;
   }
   if (scope === 'global') {
     const home = process.env.HOME || process.env.USERPROFILE || root;
@@ -367,7 +383,7 @@ export function recordTelemetry(telemetryPath, event) {
 export function summarizeTelemetry(telemetryPath) {
   if (!fs.existsSync(telemetryPath)) return { skills: {} };
   const lines = fs.readFileSync(telemetryPath, 'utf8').trim().split(/\r?\n/).filter(Boolean);
-  const stats = {};
+  const stats = Object.create(null);
   for (const line of lines) {
     try {
       const ev = JSON.parse(line);
