@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "$schema": "../../scripts/core/schemas/skill-contract.v1.json",
   "name": "team-gate",
   "version": "2.0.0",
   "description": "Execute parallel 3-agent Verification Gate (Reviewer + Challenger + Forensic Auditor) updating GATE_STATUS.md.",

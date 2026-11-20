@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "$schema": "../../scripts/core/schemas/skill-contract.v1.json",
   "name": "forge-migrate-docs",
   "version": "1.0.0",
   "description": "Ingest existing docs or map undocumented codebases into standardized PMSP .memory/ notes with verified source_refs and compiled memory.rc.json.",
@@ -24,7 +24,7 @@
     { "cmd": "node ${PLUGIN_ROOT}/scripts/forge-cli.mjs memory drift --workdir ." }
   ],
   "F_failure_modes": [
-    { "code": "BROKEN_SOURCE_REF", "action": "REJECT_DOC", "route_to": "forge:doc-standardizer" }
+    { "code": "BROKEN_SOURCE_REF", "action": "REJECT_DOC", "route_to": "harness-forge:doc-standardizer" }
   ],
   "ecosystem_edges": {
     "depends_on": ["forge-memory"],

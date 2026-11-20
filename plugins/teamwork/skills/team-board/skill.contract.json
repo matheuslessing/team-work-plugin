@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "$schema": "../../scripts/core/schemas/skill-contract.v1.json",
   "name": "team-board",
   "version": "1.0.0",
   "description": "Append-only JSONL message board with channels, @mentions, #seq zero-copy handoff refs, and automated stall detection.",

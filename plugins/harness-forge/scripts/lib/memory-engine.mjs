@@ -67,6 +67,28 @@ function collectDocs(memoryRoot) {
   return out.sort();
 }
 
+function atomicWriteFileSync(filePath, content) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const rand = Math.random().toString(36).slice(2, 8);
+  const tmp = `${filePath}.${process.pid}.${Date.now()}.${rand}.tmp`;
+  fs.writeFileSync(tmp, content, 'utf8');
+  fs.renameSync(tmp, filePath);
+}
+
+async function readOrRebuildRc(root, memoryRoot) {
+  const rcPath = path.join(memoryRoot, 'memory.rc.json');
+  if (fs.existsSync(rcPath)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(rcPath, 'utf8'));
+      if (parsed && Array.isArray(parsed.entries)) return parsed;
+    } catch {
+      // corrupted memory.rc.json -> auto-rebuild below
+    }
+  }
+  await rebuildIndex(root);
+  return JSON.parse(fs.readFileSync(rcPath, 'utf8'));
+}
+
 export function computeDocDrift(entryData, workspaceRoot) {
   const root = path.resolve(workspaceRoot);
   const reasons = [];
@@ -76,11 +98,11 @@ export function computeDocDrift(entryData, workspaceRoot) {
     if (!ref?.path) continue;
     const target = path.resolve(root, ref.path);
     const rel = normalizePosix(path.relative(root, target));
-    if (rel.startsWith('..')) {
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
       reasons.push(`Escaping source_ref path: ${ref.path}`);
       continue;
     }
-    if (!fs.existsSync(target)) {
+    if (!fs.existsSync(target) || !fs.statSync(target).isFile()) {
       reasons.push(`Missing referenced file: ${ref.path}`);
       continue;
     }
@@ -116,12 +138,12 @@ async function buildSearchCaches(memoryRoot, docsWithBodies) {
   fs.mkdirSync(cacheDir, { recursive: true });
   fs.writeFileSync(path.join(cacheDir, '.gitignore'), '*\n!.gitignore\n', 'utf8');
 
-  // Always build pure-JS BM25 index (works on every Node runtime with zero deps)
+  // Pure-JS BM25 index (works on every Node runtime with zero deps)
   const docCount = docsWithBodies.length;
-  const df = {};
+  const df = Object.create(null);
   const docs = docsWithBodies.map((d) => {
     const terms = tokenize(`${d.id} ${d.kind} ${d.tags.join(' ')} ${d.summary} ${d.body}`);
-    const tf = {};
+    const tf = Object.create(null);
     for (const t of terms) tf[t] = (tf[t] || 0) + 1;
     for (const t of Object.keys(tf)) df[t] = (df[t] || 0) + 1;
     return {
@@ -133,31 +155,9 @@ async function buildSearchCaches(memoryRoot, docsWithBodies) {
   const avgdl = docCount > 0 ? docs.reduce((s, d) => s + d.length, 0) / docCount : 0;
 
   const bm25Path = path.join(cacheDir, 'bm25-index.json');
-  const tmpBm25 = `${bm25Path}.${process.pid}.tmp`;
-  fs.writeFileSync(tmpBm25, JSON.stringify({ docCount, avgdl, df, docs }), 'utf8');
-  fs.renameSync(tmpBm25, bm25Path);
+  atomicWriteFileSync(bm25Path, JSON.stringify({ docCount, avgdl, df, docs }));
 
-  // Optional SQLite FTS5 cache via dynamic node:sqlite
-  let sqliteIndexed = false;
-  try {
-    const sqliteMod = await import('node:sqlite');
-    if (sqliteMod?.DatabaseSync) {
-      const dbPath = path.join(cacheDir, 'memory.sqlite');
-      if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
-      const db = new sqliteMod.DatabaseSync(dbPath);
-      db.exec('CREATE VIRTUAL TABLE memory_fts USING fts5(id, kind, tags, summary, body);');
-      const stmt = db.prepare('INSERT INTO memory_fts (id, kind, tags, summary, body) VALUES (?, ?, ?, ?, ?);');
-      for (const d of docsWithBodies) {
-        stmt.run(d.id, d.kind, d.tags.join(' '), d.summary, d.body);
-      }
-      db.close();
-      sqliteIndexed = true;
-    }
-  } catch {
-    sqliteIndexed = false;
-  }
-
-  return { sqliteIndexed, bm25Path };
+  return { bm25Indexed: true, bm25Path };
 }
 
 function renderExecutiveMemoryMd(rc) {
@@ -274,14 +274,10 @@ export async function rebuildIndex(workspaceRoot) {
   };
 
   const rcPath = path.join(memoryRoot, 'memory.rc.json');
-  const tmpRc = `${rcPath}.${process.pid}.tmp`;
-  fs.writeFileSync(tmpRc, JSON.stringify(rc, null, 2), 'utf8');
-  fs.renameSync(tmpRc, rcPath);
+  atomicWriteFileSync(rcPath, JSON.stringify(rc, null, 2));
 
   const memoryMdPath = path.join(memoryRoot, 'MEMORY.md');
-  const tmpMd = `${memoryMdPath}.${process.pid}.tmp`;
-  fs.writeFileSync(tmpMd, renderExecutiveMemoryMd(rc), 'utf8');
-  fs.renameSync(tmpMd, memoryMdPath);
+  atomicWriteFileSync(memoryMdPath, renderExecutiveMemoryMd(rc));
 
   const cacheRes = await buildSearchCaches(memoryRoot, docsWithBodies);
 
@@ -290,7 +286,7 @@ export async function rebuildIndex(workspaceRoot) {
     memoryMdPath: normalizePosix(memoryMdPath),
     totalEntries: entries.length,
     staleEntries: entries.filter((e) => e.stale).length,
-    sqliteIndexed: cacheRes.sqliteIndexed
+    bm25Indexed: cacheRes.bm25Indexed
   };
 }
 
@@ -325,7 +321,7 @@ export async function upsertMemoryDoc(workspaceRoot, payload) {
     if (rel.startsWith('..') || path.isAbsolute(rel)) {
       throw new Error(`source_ref path "${ref.path}" escapes workspaceRoot.`);
     }
-    if (!fs.existsSync(target)) {
+    if (!fs.existsSync(target) || !fs.statSync(target).isFile()) {
       throw new Error(`Referenced source_ref file does not exist on disk: ${ref.path}`);
     }
     const fileContent = fs.readFileSync(target, 'utf8');
@@ -365,15 +361,16 @@ export async function upsertMemoryDoc(workspaceRoot, payload) {
     throw new Error(`Memory document validation failed:\n- ${validation.errors.join('\n- ')}`);
   }
 
-  fs.mkdirSync(path.dirname(targetDocPath), { recursive: true });
-  const tmpDoc = `${targetDocPath}.${process.pid}.tmp`;
-  fs.writeFileSync(tmpDoc, fullMarkdown, 'utf8');
-  fs.renameSync(tmpDoc, targetDocPath);
+  atomicWriteFileSync(targetDocPath, fullMarkdown);
 
   await rebuildIndex(root);
-  const rc = JSON.parse(fs.readFileSync(path.join(memoryRoot, 'memory.rc.json'), 'utf8'));
+  const rc = await readOrRebuildRc(root, memoryRoot);
   const entry = rc.entries.find((e) => e.id === id);
   return { ok: true, id, path: relDocPath, entry };
+}
+
+function escapeRegExp(str) {
+  return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export async function recordAdr(workspaceRoot, {
@@ -399,20 +396,7 @@ export async function recordAdr(workspaceRoot, {
     if (m) maxNum = Math.max(maxNum, Number(m[1]));
   }
   const num = String(maxNum + 1).padStart(4, '0');
-  const id = `adr-${num}-${slugify(title)}`.slice(0, 64);
-
-  if (supersedes) {
-    const oldFile = fs
-      .readdirSync(decisionsDir)
-      .find((f) => f === `${supersedes}.md` || f.startsWith(`${supersedes}`));
-    if (oldFile) {
-      const oldFull = path.join(decisionsDir, oldFile);
-      const parsed = parseFrontmatter(fs.readFileSync(oldFull, 'utf8'));
-      parsed.data.status = 'superseded';
-      const updatedMd = serializeFrontmatter(parsed.data, parsed.body);
-      fs.writeFileSync(oldFull, updatedMd, 'utf8');
-    }
-  }
+  const id = `adr-${num}-${slugify(title)}`.slice(0, 64).replace(/-+$/, '');
 
   const body = [
     `# ADR-${num}: ${title}`,
@@ -428,7 +412,7 @@ export async function recordAdr(workspaceRoot, {
   ].join('\n');
 
   const summary = `ADR-${num}: ${title}`.slice(0, 240);
-  return upsertMemoryDoc(root, {
+  const result = await upsertMemoryDoc(root, {
     id,
     kind: 'decision',
     status: 'active',
@@ -438,14 +422,38 @@ export async function recordAdr(workspaceRoot, {
     source_refs,
     body
   });
+
+  if (supersedes) {
+    const sup = String(supersedes);
+    const supRe = new RegExp(`^${escapeRegExp(sup)}(?:-|$)`);
+    const oldFile = fs.readdirSync(decisionsDir).find((f) => {
+      if (f === `${id}.md` || !f.endsWith('.md')) return false;
+      if (f === `${sup}.md` || supRe.test(f.replace(/\.md$/, ''))) {
+        const fm = parseFrontmatter(fs.readFileSync(path.join(decisionsDir, f), 'utf8'));
+        return fm.data?.id === sup || supRe.test(String(fm.data?.id || f.replace(/\.md$/, '')));
+      }
+      return false;
+    });
+    if (oldFile) {
+      const oldFull = path.join(decisionsDir, oldFile);
+      const parsed = parseFrontmatter(fs.readFileSync(oldFull, 'utf8'));
+      parsed.data.status = 'superseded';
+      const updatedMd = serializeFrontmatter(parsed.data, parsed.body);
+      atomicWriteFileSync(oldFull, updatedMd);
+      await rebuildIndex(root);
+      const refreshedRc = await readOrRebuildRc(root, memoryRoot);
+      const refreshedEntry = refreshedRc.entries.find((e) => e.id === id);
+      if (refreshedEntry) result.entry = refreshedEntry;
+    }
+  }
+
+  return result;
 }
 
 export async function retireMemoryDoc(workspaceRoot, id, { status = 'deprecated', supersededBy = null } = {}) {
   const root = path.resolve(workspaceRoot);
   const memoryRoot = resolveMemoryRoot(root);
-  const rcPath = path.join(memoryRoot, 'memory.rc.json');
-  if (!fs.existsSync(rcPath)) await rebuildIndex(root);
-  const rc = JSON.parse(fs.readFileSync(rcPath, 'utf8'));
+  const rc = await readOrRebuildRc(root, memoryRoot);
   const entry = rc.entries.find((e) => e.id === id);
   if (!entry) throw new Error(`Memory entry "${id}" not found.`);
 
@@ -454,20 +462,14 @@ export async function retireMemoryDoc(workspaceRoot, id, { status = 'deprecated'
   parsed.data.status = status;
   const note = supersededBy ? `\n\n> Retired in favor of \`${supersededBy}\`.\n` : '';
   const updated = serializeFrontmatter(parsed.data, parsed.body + note);
-  const tmp = `${fullPath}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, updated, 'utf8');
-  fs.renameSync(tmp, fullPath);
+  atomicWriteFileSync(fullPath, updated);
   return rebuildIndex(root);
 }
 
 export async function readMemoryIndex(workspaceRoot, { kind = null, tag = null } = {}) {
   const root = path.resolve(workspaceRoot);
   const memoryRoot = resolveMemoryRoot(root);
-  const rcPath = path.join(memoryRoot, 'memory.rc.json');
-  if (!fs.existsSync(rcPath)) {
-    await rebuildIndex(root);
-  }
-  const rc = JSON.parse(fs.readFileSync(rcPath, 'utf8'));
+  const rc = await readOrRebuildRc(root, memoryRoot);
   let entries = rc.entries || [];
   if (kind) entries = entries.filter((e) => e.kind === kind);
   if (tag) entries = entries.filter((e) => (e.tags || []).includes(tag));
@@ -482,9 +484,7 @@ export async function readMemoryIndex(workspaceRoot, { kind = null, tag = null }
 export async function readMemoryDoc(workspaceRoot, id, section = null) {
   const root = path.resolve(workspaceRoot);
   const memoryRoot = resolveMemoryRoot(root);
-  const rcPath = path.join(memoryRoot, 'memory.rc.json');
-  if (!fs.existsSync(rcPath)) await rebuildIndex(root);
-  const rc = JSON.parse(fs.readFileSync(rcPath, 'utf8'));
+  const rc = await readOrRebuildRc(root, memoryRoot);
   const entry = rc.entries.find((e) => e.id === id);
   if (!entry) throw new Error(`Memory entry "${id}" not found.`);
 
@@ -531,11 +531,22 @@ export async function searchMemory(workspaceRoot, query, { kind = null, tag = nu
   const memoryRoot = resolveMemoryRoot(root);
   const rcPath = path.join(memoryRoot, 'memory.rc.json');
   const bm25Path = path.join(memoryRoot, '.cache', 'bm25-index.json');
-  if (!fs.existsSync(rcPath) || !fs.existsSync(bm25Path)) {
+  let rc;
+  let bm25;
+  try {
+    if (!fs.existsSync(rcPath) || !fs.existsSync(bm25Path)) {
+      throw new Error('Missing cache');
+    }
+    rc = JSON.parse(fs.readFileSync(rcPath, 'utf8'));
+    bm25 = JSON.parse(fs.readFileSync(bm25Path, 'utf8'));
+    if (!rc || !Array.isArray(rc.entries) || !bm25 || !Array.isArray(bm25.docs)) {
+      throw new Error('Invalid cache shape');
+    }
+  } catch {
     await rebuildIndex(root);
+    rc = JSON.parse(fs.readFileSync(rcPath, 'utf8'));
+    bm25 = JSON.parse(fs.readFileSync(bm25Path, 'utf8'));
   }
-  const rc = JSON.parse(fs.readFileSync(rcPath, 'utf8'));
-  const bm25 = JSON.parse(fs.readFileSync(bm25Path, 'utf8'));
   const qTerms = tokenize(query);
 
   const k1 = 1.5;
@@ -554,10 +565,12 @@ export async function searchMemory(workspaceRoot, query, { kind = null, tag = nu
     if (!includeStale && entry.stale) continue;
 
     let score = 0;
+    const docTf = doc.tf || {};
+    const indexDf = bm25.df || {};
     for (const term of qTerms) {
-      const tf = doc.tf[term] || 0;
+      const tf = Object.hasOwn(docTf, term) ? docTf[term] : 0;
       if (tf === 0) continue;
-      const df = bm25.df[term] || 0;
+      const df = Object.hasOwn(indexDf, term) ? indexDf[term] : 0;
       const idf = Math.log((N - df + 0.5) / (df + 0.5) + 1);
       const normTf = (tf * (k1 + 1)) / (tf + k1 * (1 - b + (b * doc.length) / avgdl));
       score += idf * normTf;
@@ -590,7 +603,7 @@ export async function checkDrift(workspaceRoot) {
   const root = path.resolve(workspaceRoot);
   const memoryRoot = resolveMemoryRoot(root);
   await rebuildIndex(root);
-  const rc = JSON.parse(fs.readFileSync(path.join(memoryRoot, 'memory.rc.json'), 'utf8'));
+  const rc = await readOrRebuildRc(root, memoryRoot);
   const staleEntries = rc.entries.filter((e) => e.stale);
   return {
     total: rc.entries.length,
@@ -638,7 +651,7 @@ export async function promoteFromTeamwork(workspaceRoot) {
         .filter(Boolean);
       if (cols.length < 3) continue;
       const [iter, approach, why, filesRaw = ''] = cols;
-      const id = `gotcha-${slugify(approach)}`.slice(0, 56);
+      const id = `gotcha-${slugify(approach)}`.slice(0, 56).replace(/-+$/, '');
       const candidateRefs = filesRaw
         .split(/[,;\s]+/)
         .map((f) => f.replace(/`/g, '').trim())

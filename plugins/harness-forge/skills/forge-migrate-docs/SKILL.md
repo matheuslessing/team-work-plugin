@@ -22,7 +22,7 @@ Transform legacy project documentation (`docs/`, `README.md`, wikis, architectur
    ```bash
    node "${PLUGIN_ROOT}/scripts/forge-cli.mjs" memory init --workdir .
    ```
-2. Spawn `forge:doc-standardizer` (or execute directly):
+2. Spawn `harness-forge:doc-standardizer` (or execute directly):
    - Inventory existing Markdown files and core codebase modules.
    - Split monolithic docs into focused notes across `architecture/`, `decisions/`, `contracts/`, and `gotchas/`.
    - Attach **real** `source_refs` (`path` + optional `symbols`) verified against files on disk, and persist each note via MCP `memory_upsert` (or `forge-cli.mjs memory upsert`) so `sha256_prefix`, `token_estimate`, and `memory.rc.json` compile automatically.

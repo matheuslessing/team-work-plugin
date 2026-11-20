@@ -23,7 +23,7 @@
   ],
   "PreToolUse": [
     {
-      "matcher": "*",
+      "matcher": ".*",
       "hooks": [
         {
           "type": "command",
@@ -35,7 +35,7 @@
   ],
   "PostToolUse": [
     {
-      "matcher": "*",
+      "matcher": ".*",
       "hooks": [
         {
           "type": "command",

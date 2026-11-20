@@ -12,17 +12,21 @@ Supports 4 workflow modes via `--mode <full|quick|survey|gate>` or `TEAMWORK_WOR
 """
 
 import asyncio
+import builtins
 import datetime
 import json
 import os
 import re
 import subprocess
 import sys
+import uuid
+from typing import Any, Dict, List, Optional, Tuple
 
 WATCHDOG_WINDOW_MINUTES = 30
 WATCHDOG_PULSE_SECONDS = 600
 
 VALID_AGENT_MODES = {"normal", "fast", "lite", "ultra", "fusion"}
+PASSING_VERDICTS = {"APPROVE", "CLEAN"}
 
 AGENT_MODES = {
     "survey": "lite",
@@ -118,7 +122,7 @@ GATE_VERDICT_SCHEMA = {
     "type": "object",
     "properties": {
         "agent_id": {"type": "string"},
-        "verdict": {"type": "string", "enum": ["APPROVE", "REQUEST_CHANGES", "CLEAN", "INTEGRITY_VIOLATION"]},
+        "verdict": {"type": "string", "enum": ["APPROVE", "REQUEST_CHANGES", "CLEAN", "INTEGRITY_VIOLATION", "REJECT"]},
         "defects": {"type": "array", "items": {"type": "string"}},
         "handoff_path": {"type": "string"},
     },
@@ -148,7 +152,7 @@ def resolve_mode() -> str:
     return env_mode if env_mode in WORKFLOW_MODES else "full"
 
 
-def get_active_orchestrator_dir(base_dir: str = None) -> str:
+def get_active_orchestrator_dir(base_dir: Optional[str] = None) -> str:
     root = base_dir or os.getcwd()
     tw_dir = os.path.join(root, ".agents", "teamwork")
     state_path = os.path.join(tw_dir, "state.json")
@@ -173,22 +177,70 @@ def get_active_orchestrator_dir(base_dir: str = None) -> str:
     return os.path.join(tw_dir, "orchestrator_1")
 
 
-def write_gate_status_md(iteration: int, verdicts: list, base_dir: str = None) -> tuple[bool, list]:
+def _sync_state_json(
+    base_dir: Optional[str] = None,
+    phase: Optional[str] = None,
+    gate_iteration: Optional[int] = None,
+    gate_result: Optional[str] = None,
+) -> None:
+    root = base_dir or os.getcwd()
+    state_path = os.path.join(root, ".agents", "teamwork", "state.json")
+    if not os.path.exists(state_path):
+        return
+    try:
+        with open(state_path, "r", encoding="utf-8") as f:
+            st = json.load(f)
+        if not isinstance(st, dict):
+            return
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        if phase:
+            prev_phase = st.get("phase")
+            st["phase"] = phase
+            history = st.setdefault("history", [])
+            if isinstance(history, list):
+                history.append({
+                    "from": prev_phase,
+                    "to": phase,
+                    "reason": "workflow.py transition",
+                    "timestamp": now_iso,
+                })
+        if gate_iteration is not None and gate_result is not None:
+            iters = [g for g in (st.get("gate_iterations") or []) if g.get("iteration") != gate_iteration]
+            iters.append({"iteration": gate_iteration, "result": gate_result, "timestamp": now_iso})
+            iters.sort(key=lambda g: g.get("iteration", 0))
+            st["gate_iterations"] = iters
+            if gate_result == "FAIL":
+                budgets = st.setdefault("budgets", {})
+                budgets["remediations_used"] = int(budgets.get("remediations_used") or 0) + 1
+        st["updated_at"] = now_iso
+        tmp_state = f"{state_path}.{os.getpid()}.{uuid.uuid4().hex[:6]}.tmp"
+        with open(tmp_state, "w", encoding="utf-8") as f:
+            json.dump(st, f, indent=2)
+        os.replace(tmp_state, state_path)
+    except Exception:
+        pass
+
+
+def write_gate_status_md(
+    iteration: int, verdicts: List[Dict[str, Any]], base_dir: Optional[str] = None
+) -> Tuple[bool, List[str]]:
     orch_dir = get_active_orchestrator_dir(base_dir)
     os.makedirs(orch_dir, exist_ok=True)
     gate_path = os.path.join(orch_dir, "GATE_STATUS.md")
 
-    all_defects = []
-    passed = True
-    rows = []
+    all_defects: List[str] = []
+    passed = bool(verdicts)
+    rows: List[str] = []
+    if not verdicts:
+        all_defects.append("No gate verdicts returned")
     for v in verdicts:
         agent_id = v.get("agent_id", "gate_agent")
-        verdict = v.get("verdict", "REQUEST_CHANGES")
-        defects = v.get("defects", []) or []
+        verdict = str(v.get("verdict") or "REJECT").strip().upper()
+        defects = [str(d) for d in (v.get("defects") or []) if d]
         handoff = v.get("handoff_path", f".agents/teamwork/{agent_id}/handoff.md")
-        if verdict in ("REQUEST_CHANGES", "INTEGRITY_VIOLATION", "REJECT"):
+        if verdict not in PASSING_VERDICTS:
             passed = False
-            all_defects.extend(defects)
+            all_defects.extend(defects or [f"{agent_id}: {verdict}"])
         rows.append(f"| `{agent_id}` | gate | **{verdict}** | `{handoff}` |")
 
     result_str = "**PASS**" if passed else "**FAIL**"
@@ -214,16 +266,22 @@ def write_gate_status_md(iteration: int, verdicts: list, base_dir: str = None) -
     else:
         existing = "# Gate Status — Verification & Final Acceptance\n\n"
 
-    tmp_path = f"{gate_path}.{os.getpid()}.tmp"
+    tmp_path = f"{gate_path}.{os.getpid()}.{uuid.uuid4().hex[:6]}.tmp"
     with open(tmp_path, "w", encoding="utf-8") as f:
         f.write(existing + "\n".join(section))
     os.replace(tmp_path, gate_path)
+    _sync_state_json(base_dir=base_dir, gate_iteration=iteration, gate_result="PASS" if passed else "FAIL")
     return passed, all_defects
 
 
-def _emit_log(msg: str):
-    if "log" in globals():
-        log(msg)
+def _get_primitive(name: str) -> Any:
+    return globals().get(name) or getattr(builtins, name, None)
+
+
+def _emit_log(msg: str) -> None:
+    log_fn = _get_primitive("log")
+    if callable(log_fn):
+        log_fn(msg)
     else:
         print(msg)
 
@@ -234,13 +292,22 @@ async def orchestrator_vm_watchdog():
     os.makedirs(teamwork_dir, exist_ok=True)
     watchdog_log = os.path.join(teamwork_dir, "watchdog.log")
     pulse_count = 0
+    loop = asyncio.get_running_loop()
 
     while True:
         await asyncio.sleep(WATCHDOG_PULSE_SECONDS)
         pulse_count += 1
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
         try:
-            subprocess.run(["git", "status", "--short"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+            await loop.run_in_executor(
+                None,
+                lambda: subprocess.run(
+                    ["git", "status", "--short"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=5,
+                ),
+            )
         except Exception:
             pass
 
@@ -262,8 +329,8 @@ async def orchestrator_vm_watchdog():
 
 
 def _resolve_primitives(agent_fn=None, parallel_fn=None):
-    ag = agent_fn or globals().get("agent")
-    par = parallel_fn or globals().get("parallel")
+    ag = agent_fn or _get_primitive("agent")
+    par = parallel_fn or _get_primitive("parallel")
     if ag is None or par is None:
         raise RuntimeError("Devin Dynamic Workflow primitives `agent` and `parallel` are not present.")
     return ag, par
@@ -401,6 +468,7 @@ async def propose_probe_compose(iteration: int, defects: list, k: int = 2, agent
 
 async def execute_survey_workflow(agent_fn=None, parallel_fn=None):
     ag, par = _resolve_primitives(agent_fn, parallel_fn)
+    _sync_state_json(phase="SURVEY")
     surveys = await par([
         lambda: run_survey_explorer(1, "Core architecture, entry points, and state management", ag),
         lambda: run_survey_explorer(2, "Domain logic, algorithms, packages, and performance", ag),
@@ -413,6 +481,7 @@ async def execute_survey_workflow(agent_fn=None, parallel_fn=None):
 
 async def execute_quick_workflow(agent_fn=None, parallel_fn=None):
     ag, par = _resolve_primitives(agent_fn, parallel_fn)
+    _sync_state_json(phase="DUAL_TRACK")
     await ag(
         "You are Teamwork Quick Worker `worker_quick_1`.\n"
         "Implement the required fix/feature with genuine production logic and real tests; write `handoff.md`.",
@@ -422,13 +491,21 @@ async def execute_quick_workflow(agent_fn=None, parallel_fn=None):
     )
     last_defects = []
     for iteration in range(1, 4):
+        _sync_state_json(phase="GATE")
         verdicts = await run_gate(iteration, include_challenger=False, agent_fn=ag, parallel_fn=par)
-        passed = all(v.get("verdict") in ("APPROVE", "CLEAN") for v in verdicts)
-        last_defects = [d for v in verdicts if v.get("verdict") in ("REQUEST_CHANGES", "INTEGRITY_VIOLATION") for d in (v.get("defects") or [])]
+        passed = bool(verdicts) and all(str(v.get("verdict") or "").strip().upper() in PASSING_VERDICTS for v in verdicts)
+        last_defects = [
+            d
+            for v in verdicts
+            if str(v.get("verdict") or "").strip().upper() not in PASSING_VERDICTS
+            for d in ((v.get("defects") or []) or [f"{v.get('agent_id', 'gate')}: {v.get('verdict', 'REJECT')}"])
+        ]
         if passed:
+            _sync_state_json(phase="DONE")
             _emit_log(f"Quick Gate Iteration {iteration} PASSED (APPROVE + CLEAN)!")
             return {"status": "PASSED", "iteration": iteration, "verdicts": verdicts}
         if iteration < 3:
+            _sync_state_json(phase="REMEDIATION")
             defects_json = json.dumps(last_defects, sort_keys=True)
             await ag(
                 f"You are Teamwork Remediation Worker `worker_quick_remediation_{iteration}`.\n"
@@ -437,6 +514,7 @@ async def execute_quick_workflow(agent_fn=None, parallel_fn=None):
                 schema=WORKER_HANDOFF_SCHEMA,
                 label=f"worker-quick-remediation-{iteration}",
             )
+    _sync_state_json(phase="FAILED")
     _emit_log("Quick Gate FAILED after max remediation iterations.")
     return {"status": "FAILED", "iterations": 3, "defects": last_defects}
 
@@ -445,6 +523,7 @@ async def execute_full_workflow(agent_fn=None, parallel_fn=None):
     ag, par = _resolve_primitives(agent_fn, parallel_fn)
     plan = await execute_survey_workflow(agent_fn=ag, parallel_fn=par)
 
+    _sync_state_json(phase="DUAL_TRACK")
     track_tasks = [lambda: run_test_writer(ag)] + [
         (lambda m=m: run_milestone_worker(m, ag)) for m in plan["milestones"]
     ]
@@ -456,20 +535,22 @@ async def execute_full_workflow(agent_fn=None, parallel_fn=None):
     max_iters = 3
 
     for iteration in range(1, max_iters + 1):
+        _sync_state_json(phase="GATE")
         verdicts = await run_gate(iteration, include_challenger=True, agent_fn=ag, parallel_fn=par)
         all_defects = [
             d
             for v in verdicts
-            if v.get("verdict") in ("REQUEST_CHANGES", "INTEGRITY_VIOLATION", "REJECT")
-            for d in (v.get("defects") or [])
+            if str(v.get("verdict") or "").strip().upper() not in PASSING_VERDICTS
+            for d in ((v.get("defects") or []) or [f"{v.get('agent_id', 'gate')}: {v.get('verdict', 'REJECT')}"])
         ]
-        gate_passed = all(v.get("verdict") in ("APPROVE", "CLEAN") for v in verdicts)
+        gate_passed = bool(verdicts) and all(str(v.get("verdict") or "").strip().upper() in PASSING_VERDICTS for v in verdicts)
 
         if gate_passed:
             _emit_log(f"Gate Iteration {iteration} PASSED (All APPROVE + CLEAN)!")
             break
 
         if iteration == max_iters:
+            _sync_state_json(phase="FAILED")
             _emit_log(f"Gate Iteration {iteration} FAILED. Remediation budget exhausted; refusing Victory Audit.")
             return {
                 "status": "GATE_FAILED_EXHAUSTED",
@@ -477,6 +558,7 @@ async def execute_full_workflow(agent_fn=None, parallel_fn=None):
                 "defects": all_defects,
             }
 
+        _sync_state_json(phase="REMEDIATION")
         _emit_log(f"Gate Iteration {iteration} FAILED ({len(all_defects)} defects). Running remediation.")
         if iteration >= 2:
             await propose_probe_compose(iteration, all_defects, k=2, agent_fn=ag, parallel_fn=par)
@@ -492,38 +574,68 @@ async def execute_full_workflow(agent_fn=None, parallel_fn=None):
             )
 
     if not gate_passed:
+        _sync_state_json(phase="FAILED")
         return {"status": "GATE_FAILED_EXHAUSTED", "iterations": max_iters, "defects": all_defects}
 
+    _sync_state_json(phase="VICTORY_AUDIT")
     victory = await ag(
         "You are Teamwork `victory_auditor` spawned by Sentinel.\n"
         "Verify every checkbox in `ORIGINAL_REQUEST.md`, active `GATE_STATUS.md`, and run live E2E tests.\n"
-        "Write `.agents/teamwork/victory_auditor/handoff.md` and `.agents/teamwork/sentinel/handoff.md`.",
+        "Write `.agents/teamwork/victory_auditor/handoff.md`.",
         phase="victory_audit",
         schema=GATE_VERDICT_SCHEMA,
         label="victory-auditor",
         mode=AGENT_MODES["victory_auditor"],
     )
-    _emit_log(f"Victory Audit Verdict: {victory.get('verdict')}")
+    v_verdict = str((victory or {}).get("verdict") or "REJECT").strip().upper()
+    if v_verdict not in PASSING_VERDICTS:
+        _sync_state_json(phase="FAILED")
+        _emit_log(f"Victory Audit FAILED ({v_verdict}). Refusing completion.")
+        return {
+            "status": "VICTORY_AUDIT_FAILED",
+            "victory": victory,
+            "defects": (victory or {}).get("defects") or [],
+        }
+
+    _sync_state_json(phase="DONE")
+    _emit_log(f"Victory Audit Verdict: {v_verdict}")
     return {"status": "COMPLETED", "victory": victory}
 
 
-async def main():
+async def main() -> int:
     mode = resolve_mode()
     meta = WORKFLOW_MODES[mode]
-    await register_workflow(meta)
+    reg_fn = _get_primitive("register_workflow")
+    if reg_fn is None:
+        raise RuntimeError("Devin Dynamic Workflow primitive `register_workflow` is not present.")
+    await reg_fn(meta)
 
     watchdog_task = asyncio.create_task(orchestrator_vm_watchdog())
+    exit_code = 0
     try:
         if mode == "survey":
             await execute_survey_workflow()
         elif mode == "quick":
-            await execute_quick_workflow()
+            res = await execute_quick_workflow()
+            if isinstance(res, dict) and res.get("status") in ("FAILED", "GATE_FAILED_EXHAUSTED", "VICTORY_AUDIT_FAILED"):
+                exit_code = 2
         elif mode == "gate":
-            await run_gate(1, include_challenger=True)
+            _sync_state_json(phase="GATE")
+            verdicts = await run_gate(1, include_challenger=True)
+            passed = bool(verdicts) and all(str(v.get("verdict") or "").strip().upper() in PASSING_VERDICTS for v in verdicts)
+            if not passed:
+                exit_code = 2
         else:
-            await execute_full_workflow()
+            res = await execute_full_workflow()
+            if isinstance(res, dict) and res.get("status") in ("FAILED", "GATE_FAILED_EXHAUSTED", "VICTORY_AUDIT_FAILED"):
+                exit_code = 2
     finally:
         watchdog_task.cancel()
+        try:
+            await watchdog_task
+        except asyncio.CancelledError:
+            pass
+    return exit_code
 
 
 if __name__ == "__main__":
@@ -531,7 +643,7 @@ if __name__ == "__main__":
         invalid_modes = {k: v for k, v in AGENT_MODES.items() if v not in VALID_AGENT_MODES}
         if invalid_modes:
             raise SystemExit(f"Invalid Devin Cloud agent modes: {invalid_modes}")
-        has_globals = "register_workflow" in globals()
+        has_globals = _get_primitive("register_workflow") is not None
         print(json.dumps({
             "workflow_file": os.path.abspath(__file__),
             "supported_modes": list(WORKFLOW_MODES.keys()),
@@ -543,4 +655,4 @@ if __name__ == "__main__":
             "agent_modes": AGENT_MODES,
         }))
         sys.exit(0)
-    asyncio.run(main())
+    sys.exit(asyncio.run(main()))

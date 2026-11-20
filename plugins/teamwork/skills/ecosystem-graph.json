@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-11-20T00:50:08.532Z",
-  "skills_dir": "C:/Users/Matheus/Documents/team-plugin/plugins/teamwork/skills",
+  "generated_at": "2026-11-20T18:23:27.476Z",
+  "skills_dir": "skills",
   "nodes": [
     {
       "id": "team-audit",
@@ -16,8 +16,8 @@
         "pf-handoff-completeness"
       ],
       "line_count": 29,
-      "token_estimate": 310,
-      "content_sha256": "984a9925401d542b874a7d2d3141892ba001c06efb8c8d9d1cd0a24ada3115eb",
+      "token_estimate": 317,
+      "content_sha256": "5712e3c10262d187cd9f77bd6f0d312cbe17ef4d0713244e03ab9cbaa6e6535a",
       "valid": true
     },
     {
@@ -31,7 +31,7 @@
       ],
       "line_count": 30,
       "token_estimate": 335,
-      "content_sha256": "d2904ac05ed1165984c67855cf3464354421baf7690388cff9e148e593e896a1",
+      "content_sha256": "1a9fce8a65dda666685189a0dfd93619336c35c1f6568b36196d0beb69efb4eb",
       "valid": true
     },
     {
@@ -45,8 +45,8 @@
         "pf-loop-breaker"
       ],
       "line_count": 32,
-      "token_estimate": 364,
-      "content_sha256": "17fbeb5f853461ceafe80ce611fb6697f8ee6115aa8cbce4eb9171cde1dcfbf8",
+      "token_estimate": 365,
+      "content_sha256": "14b36ad3e76ab1971be844fea0c7245ac8f507a2e749ccb85bc5af768b5f10be",
       "valid": true
     },
     {
@@ -60,7 +60,7 @@
       ],
       "line_count": 29,
       "token_estimate": 277,
-      "content_sha256": "ad9e3a9b704675363ee212729d5ce935d77e161e57d45a160732d67e1bb8ad79",
+      "content_sha256": "d3c1f7f2f6ff30ec0f7bcddd6c143d2df440b53d11a72f438e52842f577eb2c8",
       "valid": true
     },
     {
@@ -75,7 +75,7 @@
       ],
       "line_count": 43,
       "token_estimate": 667,
-      "content_sha256": "756fd23f8380b50f24c489fffb1511614349133e77e51b5609db9a261100d178",
+      "content_sha256": "2dfc179ae48e717223ed512a893d9b7bb9af1fddc567469f0946776d0798be37",
       "valid": true
     },
     {
@@ -90,7 +90,7 @@
       ],
       "line_count": 31,
       "token_estimate": 347,
-      "content_sha256": "68a2d415c7ca45d70a0170a3819b774889eb00003ba77144aa62d16660174154",
+      "content_sha256": "b15c9fd3aae9f88fc927f1ea1c296f35c602860cf57f85fb7f87a7146b62af8c",
       "valid": true
     },
     {
@@ -106,7 +106,7 @@
       ],
       "line_count": 31,
       "token_estimate": 356,
-      "content_sha256": "08183c2147b1c9916f0c4f6ac1e515239c6372fc4ba2e478b6642366b0571233",
+      "content_sha256": "dce089a8f35372f408b744672e0a4b506e98522d3098ffff1b905d563deedb96",
       "valid": true
     },
     {
@@ -122,7 +122,7 @@
       ],
       "line_count": 41,
       "token_estimate": 620,
-      "content_sha256": "a01e0f019f7ac6738efb4fdcb381f73b744b571bb89b4695753fd1fbebb66b20",
+      "content_sha256": "9b5c1a904cc05f7ee342e522cd2c908a452758f494ea637d883286d20f7d14d3",
       "valid": true
     },
     {
@@ -133,8 +133,8 @@
       "authority_profile": "read_only",
       "program_functions": [],
       "line_count": 28,
-      "token_estimate": 247,
-      "content_sha256": "216784d1ce8ce58d343c889e7926a3a95f946e51fda5a3fc1ad75ec79be189f2",
+      "token_estimate": 255,
+      "content_sha256": "944a484ee35eb8a1519b3a4cbf1efd9a022018a4b714c32335eb84c2eccfcc07",
       "valid": true
     },
     {
@@ -149,7 +149,7 @@
       ],
       "line_count": 32,
       "token_estimate": 446,
-      "content_sha256": "422bb74f80123eb0ee42c2618c9da1ec1008df6c393a8a2965b8be0cc8fc1e7a",
+      "content_sha256": "d55f5bdb0ff234d50893109951e0c23100118614a6d8cdeaadf4d444fc945057",
       "valid": true
     },
     {
@@ -166,7 +166,7 @@
       ],
       "line_count": 26,
       "token_estimate": 317,
-      "content_sha256": "685b23a6f42d4feb0f693e2f8ca59ad8f4ae8d8acf9c463dca420c0d01aff002",
+      "content_sha256": "05872933e80b3703a8db85722d3776fee31f64deaa0f85b2ea687b99320f9f03",
       "valid": true
     },
     {
@@ -180,7 +180,7 @@
       ],
       "line_count": 28,
       "token_estimate": 299,
-      "content_sha256": "1c50031d3d6c071feee5e4b8c1550918e5bff53ba99664c08a6405e9083e4986",
+      "content_sha256": "78611b9254b61b839e420ef7bd2f78f189565d4e2222d4bfbde28af7af462b01",
       "valid": true
     }
   ],

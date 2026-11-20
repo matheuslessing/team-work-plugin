@@ -134,3 +134,70 @@ test('Git Worktree lifecycle isolates parallel milestone edits and refuses merge
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+test('Wave 2 regression: email/@scope mention filtering, per-channel cursors, NaN staleMinutes, merge conflict abort', async () => {
+  const { parseMentions, postMessage: postMsg } = await import('../plugins/teamwork/scripts/lib/board.mjs');
+  const { createInitialState, saveState } = await import('../plugins/teamwork/scripts/lib/state-machine.mjs');
+  const { pruneWorktree } = await import('../plugins/teamwork/scripts/lib/worktree.mjs');
+
+  const pm = parseMentions('Email alice@example.com or install @types/node; ask @worker_1 and @#m2.');
+  assert.deepEqual(pm.mentions, ['worker_1']);
+  assert.deepEqual(pm.channelMentions, ['m2']);
+
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tw-reg-p3-'));
+  const gitEnv = {
+    ...process.env,
+    GIT_AUTHOR_NAME: 'Test Bot',
+    GIT_AUTHOR_EMAIL: 'bot@example.com',
+    GIT_COMMITTER_NAME: 'Test Bot',
+    GIT_COMMITTER_EMAIL: 'bot@example.com'
+  };
+  try {
+    saveState(tmp, createInitialState(tmp));
+    postMsg(tmp, { from: 'worker_1', channel: 'm1', text: '@coordinator check m1' });
+    postMsg(tmp, { from: 'worker_2', channel: 'm2', text: '@coordinator check m2' });
+
+    readBoard(tmp, { since: 0, channel: 'm1', reader: 'coordinator' });
+    const futureMs = Date.now() + 15 * 60 * 1000;
+    const stallCursors = detectStalls(tmp, { staleMinutes: 0, nowMs: futureMs });
+    assert.equal(stallCursors.stalled, true);
+    assert.ok(!stallCursors.stalls.some((s) => s.kind === 'coordinator_unread' && s.from === 'worker_1'));
+    assert.ok(stallCursors.stalls.some((s) => s.kind === 'coordinator_unread' && s.from === 'worker_2'));
+
+    const stallNan = detectStalls(tmp, { staleMinutes: Number.NaN, nowMs: futureMs });
+    assert.equal(stallNan.stalled, true);
+    assert.ok(stallNan.stalls.some((s) => s.kind === 'coordinator_unread' && s.from === 'worker_2'));
+
+    // Conflict merge abort check
+    const wtRepo = path.join(tmp, 'git-conflict');
+    fs.mkdirSync(path.join(wtRepo, 'src'), { recursive: true });
+    execFileSync('git', ['init'], { cwd: wtRepo, stdio: 'pipe' });
+    fs.writeFileSync(path.join(wtRepo, 'src', 'conflict.js'), 'export const v = "base";\n', 'utf8');
+    execFileSync('git', ['add', '.'], { cwd: wtRepo, stdio: 'pipe' });
+    execFileSync('git', ['commit', '-m', 'base'], { cwd: wtRepo, env: gitEnv, stdio: 'pipe' });
+
+    saveState(wtRepo, createInitialState(wtRepo));
+    const { wtDir } = createWorktree(wtRepo, 'worker_cf');
+    fs.writeFileSync(path.join(wtDir, 'src', 'conflict.js'), 'export const v = "worker";\n', 'utf8');
+    execFileSync('git', ['add', 'src/conflict.js'], { cwd: wtDir, stdio: 'pipe' });
+    execFileSync('git', ['commit', '-m', 'worker edit'], { cwd: wtDir, env: gitEnv, stdio: 'pipe' });
+
+    fs.writeFileSync(path.join(wtRepo, 'src', 'conflict.js'), 'export const v = "main";\n', 'utf8');
+    execFileSync('git', ['add', 'src/conflict.js'], { cwd: wtRepo, stdio: 'pipe' });
+    execFileSync('git', ['commit', '-m', 'main edit'], { cwd: wtRepo, env: gitEnv, stdio: 'pipe' });
+
+    const gatePath = path.join(wtRepo, '.agents', 'teamwork', 'orchestrator_1', 'GATE_STATUS.md');
+    fs.mkdirSync(path.dirname(gatePath), { recursive: true });
+    fs.writeFileSync(
+      gatePath,
+      '# Gate\n## Gate — Iteration 1\n| Agent | Role | Verdict | Source |\n| `r` | gate | **APPROVE** | `h` |\n| `a` | gate | **CLEAN** | `h` |\nGate Result: **PASS**\n',
+      'utf8'
+    );
+
+    assert.throws(() => mergeWorktree(wtRepo, 'worker_cf'), /conflict|CONFLICT|Command failed/i);
+    assert.equal(fs.existsSync(path.join(wtRepo, '.git', 'MERGE_HEAD')), false);
+    pruneWorktree(wtRepo, 'worker_cf', { deleteBranch: true });
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});

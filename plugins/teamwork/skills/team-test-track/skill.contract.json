@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "$schema": "../../scripts/core/schemas/skill-contract.v1.json",
   "name": "team-test-track",
   "version": "2.0.0",
   "description": "Launch independent Test Writer to build 4-tier E2E tests bound to frozen contracts, dynamic runner, TEST_INFRA.md, and TEST_READY.md.",

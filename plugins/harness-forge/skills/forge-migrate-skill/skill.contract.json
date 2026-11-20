@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "$schema": "../../scripts/core/schemas/skill-contract.v1.json",
   "name": "forge-migrate-skill",
   "version": "1.0.0",
   "description": "Analyze and upgrade legacy SKILL.md, playbooks, or prompts into standardized SkillOps 5-tuple + HASP + Progressive Disclosure skills.",
@@ -23,7 +23,7 @@
     { "cmd": "node ${PLUGIN_ROOT}/scripts/forge-cli.mjs skillops audit --skills-dir .agents/skills --strict" }
   ],
   "F_failure_modes": [
-    { "code": "BROKEN_VALIDATOR_CMD", "action": "REPAIR_CONTRACT", "route_to": "forge:skill-migrator" }
+    { "code": "BROKEN_VALIDATOR_CMD", "action": "REPAIR_CONTRACT", "route_to": "harness-forge:skill-migrator" }
   ],
   "ecosystem_edges": {
     "depends_on": [],

@@ -4,6 +4,7 @@ globs:
   - "**/*test*"
   - "**/*spec*"
   - "**/run_tests*"
+  - "**/run-tests*"
 description: Enforces the Teamwork Forensic Integrity Mandate on tests and runners (backed by HASP PostToolUse checks).
 ---
 

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { getBoardStatus, readBoard } from './board.mjs';
 import { detectStalls } from './stall-monitor.mjs';
 import { getActiveOrchestrator, getTeamworkRoot, loadState } from './state-machine.mjs';
+import { evaluateLatestGate } from '../core/validator.mjs';
 
 const PHASE_INDEX = {
   INIT: 1,
@@ -120,8 +121,8 @@ export function buildView(workdir) {
 
   const gatePath = path.join(twRoot, activeOrch.id, 'GATE_STATUS.md');
   if (fs.existsSync(gatePath)) {
-    const gateText = fs.readFileSync(gatePath, 'utf8');
-    if (/INTEGRITY VIOLATION|REQUEST_CHANGES|Gate Result:\s*\*\*FAIL\*\*/i.test(gateText)) {
+    const gateEval = evaluateLatestGate(fs.readFileSync(gatePath, 'utf8'));
+    if (gateEval.failed) {
       attention.push({
         id: 'att-gate-fail',
         kind: 'failure',

@@ -19,9 +19,9 @@ Generate and present the outcome-oriented live dashboard (Antigravity Narrator `
    ```bash
    node "${PLUGIN_ROOT}/scripts/teamwork-cli.mjs" status --workdir .
    ```
-2. Optionally inspect `.agents/teamwork/view.json`, `.agents/teamwork/state.json`, and `.agents/teamwork/skill-bom.json`.
+2. Optionally inspect `.agents/teamwork/view.json`, `.agents/teamwork/state.json`, `.agents/teamwork/board-meta.json`, and active `GATE_STATUS.md`.
 3. Present:
    - **LTS Phase, Active Orchestrator & Budget Usage** (`spawns_used`, `remediations_used`)
    - **Outcome Threads & Workstream States**
-   - **Prioritized Attention Queue** (`decision > failure > review > stuck > quota > fyi`)
+   - **Prioritized Attention Queue** (`decision > failure > review > stuck > quota > error > fyi`)
    - **Latest Gate Result & Stall Monitor Check**

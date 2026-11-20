@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "$schema": "../../scripts/core/schemas/skill-contract.v1.json",
   "name": "team-survey",
   "version": "2.0.0",
   "description": "Consult project memory for architecture & drift, dispatch parallel read-only Explorers, and synthesize PROJECT.md.",

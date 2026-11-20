@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { validateSkillDir } from '../scripts/core/validator.mjs';
 import {
   checkDrift,
+  promoteFromTeamwork,
   readMemoryDoc,
   readMemoryIndex,
   rebuildIndex,
@@ -130,7 +131,17 @@ const ALL_TOOLS = [
         consequences: { type: 'string' },
         supersedes: { type: ['string', 'null'] },
         tags: { type: 'array', items: { type: 'string' } },
-        source_refs: { type: 'array' }
+        source_refs: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['path'],
+            properties: {
+              path: { type: 'string' },
+              symbols: { type: 'array', items: { type: 'string' } }
+            }
+          }
+        }
       }
     }
   },
@@ -153,6 +164,17 @@ const ALL_TOOLS = [
     name: 'memory_rebuild_index',
     readTool: false,
     description: 'Deterministically recompile memory.rc.json, MEMORY.md, and search cache from .memory/**/*.md.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project_dir: { type: 'string' }
+      }
+    }
+  },
+  {
+    name: 'memory_promote',
+    readTool: false,
+    description: 'Promote Teamwork DEAD_ENDS.md lessons into verified .memory/gotchas/*.md entries.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -269,6 +291,8 @@ async function handleToolCall(name, args = {}) {
       });
     case 'memory_rebuild_index':
       return rebuildIndex(projectDir);
+    case 'memory_promote':
+      return promoteFromTeamwork(projectDir);
     case 'skill_index': {
       const skillsDir = args.skills_dir
         ? path.resolve(projectDir, args.skills_dir)
@@ -330,13 +354,17 @@ async function dispatchMessage(msg) {
         jsonrpc: '2.0',
         id,
         result: {
-          protocolVersion: '2024-11-05',
+          protocolVersion: params?.protocolVersion || '2024-11-05',
           capabilities: { tools: {} },
           serverInfo: { name: 'harness-forge-memory', version: '2.0.0' }
         }
       });
     } else if (method === 'ping') {
       sendResponse({ jsonrpc: '2.0', id, result: {} });
+    } else if (method === 'resources/list') {
+      sendResponse({ jsonrpc: '2.0', id, result: { resources: [] } });
+    } else if (method === 'prompts/list') {
+      sendResponse({ jsonrpc: '2.0', id, result: { prompts: [] } });
     } else if (method === 'tools/list') {
       const tools = getVisibleTools().map(({ name, description, inputSchema }) => ({
         name,
@@ -385,27 +413,65 @@ let buffer = Buffer.alloc(0);
 
 async function processBuffer() {
   while (buffer.length > 0) {
-    const str = buffer.toString('utf8');
-    if (/^\s*Content-Length:/i.test(str)) {
+    while (buffer.length > 0 && (buffer[0] === 0x0d || buffer[0] === 0x0a)) {
+      buffer = buffer.slice(1);
+    }
+    if (buffer.length === 0) return;
+
+    const headPeek = buffer.slice(0, Math.min(buffer.length, 64)).toString('utf8');
+    if (/^(?:Content-Length|Content-Type):/i.test(headPeek)) {
       useContentLength = true;
-      const headerEnd = buffer.indexOf('\r\n\r\n');
-      const altEnd = headerEnd === -1 ? buffer.indexOf('\n\n') : -1;
-      const sepIdx = headerEnd !== -1 ? headerEnd : altEnd;
-      const sepLen = headerEnd !== -1 ? 4 : 2;
+      const crlfIdx = buffer.indexOf('\r\n\r\n');
+      const lfIdx = buffer.indexOf('\n\n');
+      let sepIdx = -1;
+      let sepLen = 0;
+      if (crlfIdx !== -1 && (lfIdx === -1 || crlfIdx <= lfIdx)) {
+        sepIdx = crlfIdx;
+        sepLen = 4;
+      } else if (lfIdx !== -1) {
+        sepIdx = lfIdx;
+        sepLen = 2;
+      }
       if (sepIdx === -1) return;
+
       const headerStr = buffer.slice(0, sepIdx).toString('utf8');
       const m = headerStr.match(/Content-Length:\s*(\d+)/i);
       if (!m) {
         buffer = buffer.slice(sepIdx + sepLen);
+        sendResponse({
+          jsonrpc: '2.0',
+          id: null,
+          error: { code: -32700, message: 'Parse error: missing valid Content-Length header' }
+        });
         continue;
       }
       const len = Number(m[1]);
+      if (!Number.isSafeInteger(len) || len < 0) {
+        buffer = buffer.slice(sepIdx + sepLen);
+        sendResponse({
+          jsonrpc: '2.0',
+          id: null,
+          error: { code: -32700, message: 'Parse error: invalid Content-Length value' }
+        });
+        continue;
+      }
       const total = sepIdx + sepLen + len;
       if (buffer.length < total) return;
       const bodyStr = buffer.slice(sepIdx + sepLen, total).toString('utf8');
       buffer = buffer.slice(total);
       if (bodyStr.trim()) {
-        await dispatchMessage(JSON.parse(bodyStr));
+        let parsed;
+        try {
+          parsed = JSON.parse(bodyStr);
+        } catch (parseErr) {
+          sendResponse({
+            jsonrpc: '2.0',
+            id: null,
+            error: { code: -32700, message: `Parse error: ${parseErr.message}` }
+          });
+          continue;
+        }
+        await dispatchMessage(parsed);
       }
     } else {
       const nlIdx = buffer.indexOf('\n');
@@ -413,11 +479,28 @@ async function processBuffer() {
       const line = buffer.slice(0, nlIdx).toString('utf8').trim();
       buffer = buffer.slice(nlIdx + 1);
       if (line) {
-        await dispatchMessage(JSON.parse(line));
+        let parsed;
+        try {
+          parsed = JSON.parse(line);
+        } catch (parseErr) {
+          sendResponse({
+            jsonrpc: '2.0',
+            id: null,
+            error: { code: -32700, message: `Parse error: ${parseErr.message}` }
+          });
+          continue;
+        }
+        await dispatchMessage(parsed);
       }
     }
   }
 }
+
+process.stdout.on('error', (err) => {
+  if (err && err.code === 'EPIPE') {
+    process.exit(0);
+  }
+});
 
 let processing = Promise.resolve();
 process.stdin.on('data', (chunk) => {
@@ -428,5 +511,7 @@ process.stdin.on('data', (chunk) => {
 });
 
 process.stdin.on('end', () => {
-  processing.finally(() => process.exit(0));
+  processing.finally(() => {
+    process.stdout.write('', () => process.exit(0));
+  });
 });

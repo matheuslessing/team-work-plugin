@@ -30,4 +30,4 @@ Library-time skill maintenance (*SkillOps*, arXiv:2605.13716) preventing skill t
   ```
 
 ## Maintenance Actions
-Act on `maintenanceActions`: `merge` overlapping skills, `repair` invalid contracts, `add_validator` for unchecked skills, or `retire` obsolete skills.
+Act on `maintenanceActions`: `merge` overlapping skills, `repair` invalid contracts, `add_adapter` for missing HASP validators, or `retire` obsolete skills.

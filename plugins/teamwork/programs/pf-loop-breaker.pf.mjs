@@ -4,18 +4,32 @@ import { getActiveOrchestrator, getTeamworkRoot } from '../scripts/lib/state-mac
 
 export const meta = {
   id: 'pf-loop-breaker',
-  version: '1.0.0',
+  version: '1.1.0',
   event: 'PostToolUse'
 };
 
-function normalizeErrorSig(tool, errorText) {
-  return `${tool}:${String(errorText).trim().replace(/\s+/g, ' ').slice(0, 120)}`;
+function formatErrorText(rawError) {
+  if (!rawError) return '';
+  if (typeof rawError === 'string') return rawError.trim();
+  if (typeof rawError === 'object') {
+    if (typeof rawError.message === 'string' && rawError.message.trim()) return rawError.message.trim();
+    if (typeof rawError.stderr === 'string' && rawError.stderr.trim()) return rawError.stderr.trim();
+    try {
+      return JSON.stringify(rawError);
+    } catch {
+      return 'Unknown object error';
+    }
+  }
+  return String(rawError).trim();
 }
 
-export function should_activate(state, action) {
+function normalizeErrorSig(tool, errorText) {
+  return `${tool}:${errorText.replace(/\s+/g, ' ').slice(0, 120)}`;
+}
+
+export function should_activate(state) {
   const twRoot = getTeamworkRoot(state.workdir || process.cwd());
-  if (!fs.existsSync(twRoot)) return false;
-  return Boolean(action?.error || action?.toolError);
+  return fs.existsSync(twRoot);
 }
 
 export function intervene(state, action) {
@@ -23,28 +37,48 @@ export function intervene(state, action) {
   const twRoot = getTeamworkRoot(workdir);
   const histPath = path.join(twRoot, '.tool-history.json');
 
-  let hist = { errors: [] };
+  let hist = { errors: [], streaks: {} };
   if (fs.existsSync(histPath)) {
     try {
       hist = JSON.parse(fs.readFileSync(histPath, 'utf8'));
       hist.errors = Array.isArray(hist.errors) ? hist.errors : [];
+      hist.streaks = hist.streaks && typeof hist.streaks === 'object' ? hist.streaks : {};
     } catch {
-      hist = { errors: [] };
+      hist = { errors: [], streaks: {} };
     }
   }
 
-  const errText = action.error || action.toolError || '';
-  const sig = normalizeErrorSig(action.tool || 'tool', errText);
-  hist.errors.push({ sig, timestamp: new Date().toISOString() });
+  const agentKey = state.activeAgentId || 'default';
+  const errText = formatErrorText(action?.error || action?.toolError);
+
+  if (!errText) {
+    // Successful call resets active error streak & cleared error history for this agent
+    if (!hist.streaks[agentKey] && hist.errors.length === 0) {
+      return { type: 'NOOP' };
+    }
+    hist.streaks[agentKey] = { sig: '', count: 0 };
+    hist.errors = hist.errors.filter((e) => (e.agent || 'default') !== agentKey);
+    fs.mkdirSync(twRoot, { recursive: true });
+    const tmp = `${histPath}.${process.pid}.${Date.now()}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(hist, null, 2), 'utf8');
+    fs.renameSync(tmp, histPath);
+    return { type: 'NOOP' };
+  }
+
+  const sig = normalizeErrorSig(action?.tool || 'tool', errText);
+  const prev = hist.streaks[agentKey] || { sig: '', count: 0 };
+  const count = prev.sig === sig ? prev.count + 1 : 1;
+  hist.streaks[agentKey] = { sig, count, timestamp: new Date().toISOString() };
+
+  hist.errors.push({ sig, agent: agentKey, timestamp: new Date().toISOString() });
   if (hist.errors.length > 20) hist.errors = hist.errors.slice(-20);
 
   fs.mkdirSync(twRoot, { recursive: true });
-  const tmp = `${histPath}.${process.pid}.tmp`;
+  const tmp = `${histPath}.${process.pid}.${Date.now()}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(hist, null, 2), 'utf8');
   fs.renameSync(tmp, histPath);
 
-  const last3 = hist.errors.slice(-3);
-  if (last3.length === 3 && last3.every((e) => e.sig === sig)) {
+  if (count >= 3) {
     const activeOrch = getActiveOrchestrator(workdir);
     const deadEndsRel = `.agents/teamwork/${activeOrch.id}/DEAD_ENDS.md`;
     return {

@@ -4,11 +4,26 @@ import { normalizePosix, parseFrontmatter } from '../core/frontmatter.mjs';
 import { runProgramFunctions } from '../core/hasp-runner.mjs';
 import { listSkillDirs } from './skillops.mjs';
 
+const STOPWORDS = new Set([
+  'the', 'and', 'for', 'with', 'that', 'this', 'from', 'into', 'your', 'about',
+  'what', 'when', 'where', 'which', 'will', 'would', 'should', 'could', 'have',
+  'has', 'had', 'are', 'was', 'were', 'been', 'being', 'not', 'but', 'can',
+  'all', 'any', 'use', 'using', 'via', 'per', 'run', 'make', 'create', 'help',
+  'me', 'to', 'of', 'in', 'on', 'at', 'by', 'as', 'is', 'it', 'an', 'or',
+  'do', 'write', 'please', 'explain', 'give', 'how'
+]);
+
+const MIN_TRIGGER_SCORE = 0.35;
+
+function escapeRegExp(str) {
+  return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function tokenize(text) {
   return String(text || '')
     .toLowerCase()
     .split(/[^a-z0-9_-]+/)
-    .filter((t) => t.length >= 2);
+    .filter((t) => t.length >= 2 && !STOPWORDS.has(t));
 }
 
 function loadLevel1Catalog(skillsDirs) {
@@ -38,13 +53,13 @@ function selectSkillProgressiveDisclosure(prompt, catalog) {
   const lowerPrompt = String(prompt || '').toLowerCase();
   // Explicit slash trigger check first
   for (const item of catalog) {
-    if (new RegExp(`(?:^|\\s)/${item.name}(?:\\s|$)`).test(lowerPrompt)) {
+    if (new RegExp(`(?:^|\\s)/${escapeRegExp(item.name)}(?:\\s|$)`).test(lowerPrompt)) {
       return { selected: item.name, score: 100 };
     }
   }
 
   const qTokens = new Set(tokenize(prompt));
-  let best = { selected: null, score: -1 };
+  let best = { selected: null, score: 0 };
   for (const item of catalog) {
     const docTokens = tokenize(`${item.name.replace(/-/g, ' ')} ${item.description}`);
     let hits = 0;
@@ -56,7 +71,10 @@ function selectSkillProgressiveDisclosure(prompt, catalog) {
       best = { selected: item.name, score };
     }
   }
-  return best;
+  if (best.score < MIN_TRIGGER_SCORE) {
+    return { selected: null, score: Number(best.score.toFixed(4)) };
+  }
+  return { selected: best.selected, score: Number(best.score.toFixed(4)) };
 }
 
 export async function runSkillUseEval(suiteDirOrFile, repoRoot = process.cwd()) {
@@ -74,14 +92,32 @@ export async function runSkillUseEval(suiteDirOrFile, repoRoot = process.cwd()) 
   for (const sc of scenarios) {
     // 1. Trigger Score (Progressive Disclosure: Level-1 name+description only)
     const trig = selectSkillProgressiveDisclosure(sc.prompt, catalog);
+    const isAbstain = sc.expected_skill === null;
     const triggerPass = trig.selected === sc.expected_skill ? 1 : 0;
+
+    if (isAbstain) {
+      results.push({
+        id: sc.id,
+        expected_skill: null,
+        triggered_skill: trig.selected,
+        trigger: triggerPass,
+        compliance: 1,
+        boundary: 1,
+        su_score: triggerPass,
+        compliance_missing: [],
+        boundary_detail: 'abstain_scenario'
+      });
+      continue;
+    }
 
     const item = catalogByName.get(sc.expected_skill);
 
     // 2. Compliance Score (required steps/commands/validators/artifacts present in contract+SKILL.md)
     let compliancePass = 0;
     const complianceMissing = [];
-    if (item) {
+    if (!item) {
+      complianceMissing.push(`MISSING_SKILL:${sc.expected_skill}`);
+    } else {
       const combined = `${item.rawBody}\n${JSON.stringify(item.contract)}`.toLowerCase();
       const checks = sc.compliance_keywords || [];
       let matched = 0;
@@ -93,8 +129,8 @@ export async function runSkillUseEval(suiteDirOrFile, repoRoot = process.cwd()) 
     }
 
     // 3. Boundary Score (HASP PreToolUse/PostToolUse actually blocks/flags forbidden_action)
-    let boundaryPass = 1;
-    let boundaryDetail = 'no_forbidden_probe';
+    let boundaryPass = item ? 1 : 0;
+    let boundaryDetail = item ? 'no_forbidden_probe' : 'missing_expected_skill';
     if (sc.forbidden_action && item) {
       const programsDir = path.join(item.pluginRoot, 'programs');
       const scope = {

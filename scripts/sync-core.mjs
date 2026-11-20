@@ -24,6 +24,10 @@ function walkFiles(dir, base = dir, out = []) {
   return out.sort();
 }
 
+function readNormalizedLf(filePath) {
+  return fs.readFileSync(filePath, 'utf8').replace(/\r\n/g, '\n');
+}
+
 const srcFiles = walkFiles(coreSrc);
 
 if (checkOnly) {
@@ -39,9 +43,7 @@ if (checkOnly) {
       continue;
     }
     for (const rel of srcFiles) {
-      const a = fs.readFileSync(path.join(coreSrc, rel));
-      const b = fs.readFileSync(path.join(target, rel));
-      if (!a.equals(b)) {
+      if (readNormalizedLf(path.join(coreSrc, rel)) !== readNormalizedLf(path.join(target, rel))) {
         drifts.push(`Content drift in ${path.join(target, rel)}`);
       }
     }
@@ -52,13 +54,19 @@ if (checkOnly) {
   }
   console.log(`PASS: core synced across all plugins (${srcFiles.length} files each).`);
 } else {
+  const srcSet = new Set(srcFiles);
   for (const target of targets) {
-    fs.rmSync(target, { recursive: true, force: true });
+    fs.mkdirSync(target, { recursive: true });
     for (const rel of srcFiles) {
       const srcFile = path.join(coreSrc, rel);
       const dstFile = path.join(target, rel);
       fs.mkdirSync(path.dirname(dstFile), { recursive: true });
       fs.copyFileSync(srcFile, dstFile);
+    }
+    for (const rel of walkFiles(target)) {
+      if (!srcSet.has(rel)) {
+        fs.rmSync(path.join(target, rel), { force: true });
+      }
     }
     console.log(`Synced ${srcFiles.length} core files -> ${target}`);
   }

@@ -8,7 +8,7 @@ export function slugify(text) {
   return String(text || '')
     .toLowerCase()
     .trim()
-    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/[^a-z0-9\s_-]/g, '')
     .replace(/[\s_]+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '') || 'section';
@@ -62,9 +62,23 @@ function splitInlineArray(inner) {
   let quote = null;
   for (let i = 0; i < inner.length; i++) {
     const ch = inner[i];
-    if ((ch === '"' || ch === "'") && inner[i - 1] !== '\\') {
-      if (quote === ch) quote = null;
-      else if (!quote) quote = ch;
+    if (quote && ch === '\\' && quote === '"' && i + 1 < inner.length) {
+      cur += ch + inner[i + 1];
+      i += 1;
+      continue;
+    }
+    if (quote === "'" && ch === "'" && inner[i + 1] === "'") {
+      cur += "''";
+      i += 1;
+      continue;
+    }
+    if (ch === '"') {
+      if (quote === '"') quote = null;
+      else if (!quote && (i === 0 || /[\s,]/.test(inner[i - 1]))) quote = '"';
+      cur += ch;
+    } else if (ch === "'") {
+      if (quote === "'") quote = null;
+      else if (!quote && (i === 0 || /[\s,]/.test(inner[i - 1]))) quote = "'";
       cur += ch;
     } else if (ch === ',' && !quote) {
       items.push(cur.trim());
@@ -81,9 +95,20 @@ function stripInlineComment(line) {
   let quote = null;
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
-    if ((ch === '"' || ch === "'") && line[i - 1] !== '\\') {
-      if (quote === ch) quote = null;
-      else if (!quote) quote = ch;
+    if (quote === '"' && ch === '\\' && i + 1 < line.length) {
+      i += 1;
+      continue;
+    }
+    if (quote === "'" && ch === "'" && line[i + 1] === "'") {
+      i += 1;
+      continue;
+    }
+    if (ch === '"') {
+      if (quote === '"') quote = null;
+      else if (!quote && (i === 0 || !/[A-Za-z0-9]/.test(line[i - 1]))) quote = '"';
+    } else if (ch === "'") {
+      if (quote === "'") quote = null;
+      else if (!quote && (i === 0 || !/[A-Za-z0-9]/.test(line[i - 1]))) quote = "'";
     } else if (ch === '#' && !quote && (i === 0 || /\s/.test(line[i - 1]))) {
       return line.slice(0, i);
     }
@@ -112,13 +137,42 @@ export function parseSimpleYaml(yamlText) {
     const key = topMatch[1];
     const rest = topMatch[2].trim();
 
+    if (/^[|>][+-]?$/.test(rest)) {
+      const folded = rest.startsWith('>');
+      const chompStrip = rest.endsWith('-');
+      i++;
+      const blockLines = [];
+      let baseIndent = null;
+      while (i < lines.length) {
+        const bl = lines[i];
+        if (!bl.trim()) {
+          blockLines.push('');
+          i++;
+          continue;
+        }
+        const mIndent = bl.match(/^(\s+)/);
+        if (!mIndent) break;
+        if (baseIndent === null) baseIndent = mIndent[1].length;
+        else if (mIndent[1].length < baseIndent) break;
+        blockLines.push(bl.slice(baseIndent));
+        i++;
+      }
+      while (blockLines.length > 0 && blockLines[blockLines.length - 1] === '') {
+        if (chompStrip) blockLines.pop();
+        else break;
+      }
+      const joined = folded ? blockLines.join(' ').replace(/\s+/g, ' ').trim() : blockLines.join('\n');
+      result[key] = chompStrip ? joined.replace(/\n+$/, '') : joined;
+      continue;
+    }
+
     if (rest !== '') {
       result[key] = parseScalar(rest);
       i++;
       continue;
     }
 
-    // Block list or nested object/array
+    // Block list or nested object/array (supports both indented and 0-indent `- ` lists)
     i++;
     const items = [];
     let isObjectMap = false;
@@ -130,17 +184,18 @@ export function parseSimpleYaml(yamlText) {
         i++;
         continue;
       }
-      const indentMatch = nextRaw.match(/^(\s+)/);
-      if (!indentMatch) break;
-
+      const indentMatch = nextRaw.match(/^(\s*)/);
+      const nextIndent = indentMatch ? indentMatch[1].length : 0;
       const trimmed = nextRaw.trim();
+      if (nextIndent === 0 && !trimmed.startsWith('- ')) break;
+
       if (trimmed.startsWith('- ')) {
         const afterDash = trimmed.slice(2).trim();
         const itemKv = afterDash.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
         if (itemKv) {
           const itemObj = {};
           itemObj[itemKv[1]] = itemKv[2].trim() === '' ? [] : parseScalar(itemKv[2]);
-          const baseIndent = indentMatch[1].length;
+          const baseIndent = nextIndent;
           i++;
           while (i < lines.length) {
             const subRaw = stripInlineComment(lines[i]);
@@ -150,9 +205,9 @@ export function parseSimpleYaml(yamlText) {
             }
             const subIndent = (subRaw.match(/^(\s*)/) || ['', ''])[1].length;
             const subTrim = subRaw.trim();
-            if (subIndent <= baseIndent) break;
+            if (subIndent < baseIndent || (subIndent === baseIndent && subTrim.startsWith('- '))) break;
+            if (subIndent === baseIndent && !subTrim.startsWith('- ')) break;
             if (subTrim.startsWith('- ') && itemKv[2].trim() === '') {
-              // Nested list inside first property
               itemObj[itemKv[1]].push(parseScalar(subTrim.slice(2)));
               i++;
               continue;
@@ -176,7 +231,7 @@ export function parseSimpleYaml(yamlText) {
                   }
                   const arrIndent = (arrRaw.match(/^(\s*)/) || ['', ''])[1].length;
                   const arrTrim = arrRaw.trim();
-                  if (arrIndent <= propIndent || !arrTrim.startsWith('- ')) break;
+                  if (arrIndent < propIndent || !arrTrim.startsWith('- ')) break;
                   subArr.push(parseScalar(arrTrim.slice(2)));
                   i++;
                 }
@@ -203,7 +258,7 @@ export function parseSimpleYaml(yamlText) {
       }
     }
 
-    if (items.length > 0) {
+    if (items.length > 0 && !isObjectMap) {
       result[key] = items;
     } else if (isObjectMap) {
       result[key] = objMap;
@@ -216,7 +271,7 @@ export function parseSimpleYaml(yamlText) {
 }
 
 export function parseFrontmatter(text) {
-  const normalized = String(text || '').replace(/\r\n/g, '\n');
+  const normalized = String(text || '').replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
   const lines = normalized.split('\n');
   if (lines[0]?.trim() !== '---') {
     return { hasFrontmatter: false, data: {}, body: normalized, frontmatterLineCount: 0 };
@@ -246,7 +301,11 @@ function formatYamlScalar(val) {
   if (val === null || val === undefined) return 'null';
   if (typeof val === 'boolean' || typeof val === 'number') return String(val);
   const str = String(val);
-  if (/^[\w./-]+$/.test(str) && !['true', 'false', 'null'].includes(str)) {
+  if (
+    /^[\w./-]+$/.test(str) &&
+    !/^-?\d+(?:\.\d+)?$/.test(str) &&
+    !['true', 'false', 'null', '~'].includes(str)
+  ) {
     return str;
   }
   return JSON.stringify(str);

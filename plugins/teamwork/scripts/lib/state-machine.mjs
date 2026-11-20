@@ -1,6 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { normalizePosix, sha256Hex } from '../core/frontmatter.mjs';
+import { evaluateLatestGate } from '../core/validator.mjs';
+
+export { evaluateLatestGate };
 
 export const VALID_PHASES = [
   'INIT',
@@ -15,7 +18,7 @@ export const VALID_PHASES = [
 ];
 
 export const VALID_TRANSITIONS = {
-  INIT: ['SURVEY', 'DUAL_TRACK', 'GATE', 'DONE', 'FAILED'],
+  INIT: ['SURVEY', 'CONTRACT_FROZEN', 'DUAL_TRACK', 'GATE', 'DONE', 'FAILED'],
   SURVEY: ['CONTRACT_FROZEN', 'DUAL_TRACK', 'GATE', 'DONE', 'FAILED'],
   CONTRACT_FROZEN: ['DUAL_TRACK', 'GATE', 'FAILED'],
   DUAL_TRACK: ['GATE', 'REMEDIATION', 'FAILED'],
@@ -75,6 +78,8 @@ export function createInitialState(workdir, { mode = 'full', runtime = 'DEVIN_CL
     budgets: {
       max_spawns: 16,
       spawns_used: 0,
+      total_spawns_used: 0,
+      max_orchestrators: 5,
       max_remediations: 3,
       remediations_used: 0,
       max_turns: 80
@@ -97,10 +102,25 @@ export function loadState(workdir) {
   if (!fs.existsSync(statePath)) {
     return createInitialState(workdir);
   }
-  const raw = JSON.parse(fs.readFileSync(statePath, 'utf8'));
-  const active = getActiveOrchestratorFromDirs(workdir, raw.active_orchestrator);
-  raw.active_orchestrator = active;
-  return raw;
+  let raw = null;
+  try {
+    raw = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+  } catch (err) {
+    process.stderr.write(`[state-machine] Corrupted state.json at ${statePath}: ${err.message} — recovering clean state.\n`);
+    return createInitialState(workdir);
+  }
+  const base = createInitialState(workdir);
+  const merged = {
+    ...base,
+    ...(raw && typeof raw === 'object' ? raw : {}),
+    budgets: { ...base.budgets, ...(raw?.budgets || {}) },
+    milestones: raw?.milestones || {},
+    active_agent_scopes: raw?.active_agent_scopes || {},
+    gate_iterations: Array.isArray(raw?.gate_iterations) ? raw.gate_iterations : [],
+    history: Array.isArray(raw?.history) ? raw.history : base.history
+  };
+  merged.active_orchestrator = getActiveOrchestrator(workdir).id;
+  return merged;
 }
 
 function getActiveOrchestratorFromDirs(workdir, current) {
@@ -168,14 +188,20 @@ export function registerAgentScope(workdir, {
     worktree_path: worktreePath ? normalizePosix(worktreePath) : null,
     status
   };
-  if (incrementSpawn) {
+  if (incrementSpawn && !state.active_agent_scopes[agentId]) {
     state.budgets.spawns_used = (state.budgets.spawns_used || 0) + 1;
+    state.budgets.total_spawns_used = (state.budgets.total_spawns_used || 0) + 1;
   }
   return saveState(workdir, state);
 }
 
 export function setOrchestratorGeneration(workdir, orchId) {
   const state = loadState(workdir);
+  const nextGen = Number((String(orchId).match(/^orchestrator_(\d+)$/) || [])[1] || 1);
+  const maxOrch = state.budgets?.max_orchestrators || 5;
+  if (nextGen > maxOrch) {
+    throw new Error(`Orchestrator succession limit reached (${nextGen} > max_orchestrators ${maxOrch}). Escalate to user.`);
+  }
   state.active_orchestrator = orchId;
   state.budgets.spawns_used = 0; // Fresh spawn budget for new orchestrator generation
   return saveState(workdir, state);
@@ -189,7 +215,7 @@ export function freezeContract(workdir) {
     throw new Error(`Cannot freeze contracts: PROJECT.md not found at ${projectMdPath}`);
   }
   const content = fs.readFileSync(projectMdPath, 'utf8').replace(/\r\n/g, '\n');
-  const match = content.match(/^##\s+Interface Contracts\s*\n([\s\S]*?)(?=^##\s+|\Z)/m);
+  const match = content.match(/(?:^|\n)##\s+Interface Contracts\s*\n([\s\S]*?)(?=\n##\s+|$)/);
   const contractSection = match ? match[1].trim() : content;
   if (!contractSection) {
     throw new Error(`PROJECT.md § Interface Contracts is empty (${projectMdPath})`);
@@ -227,8 +253,11 @@ export function recordGateIteration(workdir, { iteration, result }) {
 export function checkBudget(workdir) {
   const state = loadState(workdir);
   const b = state.budgets;
+  const activeOrch = getActiveOrchestrator(workdir);
+  const maxOrch = b.max_orchestrators || 5;
   return {
     spawns_ok: b.spawns_used < b.max_spawns,
+    orchestrators_ok: activeOrch.gen <= maxOrch,
     remediations_ok: b.remediations_used < b.max_remediations,
     budgets: b
   };

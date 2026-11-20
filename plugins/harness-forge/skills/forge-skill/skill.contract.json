@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "$schema": "../../scripts/core/schemas/skill-contract.v1.json",
   "name": "forge-skill",
   "version": "1.0.0",
   "description": "Scaffold and validate new skills in SkillOps 5-tuple + HASP + Progressive Disclosure format for project, global, or plugin targets.",
@@ -23,7 +23,7 @@
     { "cmd": "node ${PLUGIN_ROOT}/scripts/forge-cli.mjs skillops audit --skills-dir .agents/skills --strict" }
   ],
   "F_failure_modes": [
-    { "code": "INVALID_SKILL_CONTRACT", "action": "INJECT_CONTEXT", "route_to": "forge:skill-migrator" }
+    { "code": "INVALID_SKILL_CONTRACT", "action": "INJECT_CONTEXT", "route_to": "harness-forge:skill-migrator" }
   ],
   "ecosystem_edges": {
     "depends_on": [],

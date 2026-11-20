@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "$schema": "../../scripts/core/schemas/skill-contract.v1.json",
   "name": "team-run",
   "version": "2.0.0",
   "description": "Full Dual-Track LTS pipeline with Contract Freeze, Worktrees, Verification Gate, Propose-Probe-Compose remediation, and Victory Audit.",

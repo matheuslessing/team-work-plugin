@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "$schema": "../../scripts/core/schemas/skill-contract.v1.json",
   "name": "forge-drift",
   "version": "1.0.0",
   "description": "Compare source_refs SHA-256 hashes and symbol references against current files on disk to flag and cure stale project memory.",
@@ -24,7 +24,7 @@
     { "cmd": "node ${PLUGIN_ROOT}/scripts/forge-cli.mjs memory drift --workdir ." }
   ],
   "F_failure_modes": [
-    { "code": "STALE_MEMORY_DETECTED", "action": "INJECT_CONTEXT", "route_to": "forge:memory-curator" }
+    { "code": "STALE_MEMORY_DETECTED", "action": "INJECT_CONTEXT", "route_to": "harness-forge:memory-curator" }
   ],
   "ecosystem_edges": {
     "depends_on": ["forge-memory"],

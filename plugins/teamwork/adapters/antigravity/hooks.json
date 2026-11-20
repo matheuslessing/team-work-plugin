@@ -9,7 +9,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "edit|write_file|edit_file|exec|run_command",
+        "matcher": "edit|write_file|edit_file|write_to_file|replace_file_content|multi_replace_file_content|delete_file|exec|run_command|bash|shell",
         "hooks": [
           {
             "type": "command",
@@ -21,7 +21,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "edit|write_file|edit_file|exec|run_command",
+        "matcher": "edit|write_file|edit_file|write_to_file|replace_file_content|multi_replace_file_content|delete_file|exec|run_command|bash|shell",
         "hooks": [
           {
             "type": "command",

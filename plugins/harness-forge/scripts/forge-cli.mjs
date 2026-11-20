@@ -2,6 +2,7 @@
 /**
  * Harness Forge CLI — PMSP Project Memory, SkillOps Governance, Scaffolding & Skill-Use Evals
  */
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,22 +35,71 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const pluginRoot = path.resolve(__dirname, '..');
 
-const args = process.argv.slice(2);
-const command = args[0] || 'validate';
+const BOOLEAN_FLAGS = new Set([
+  '--strict',
+  '--no-stale',
+  '--fail-on-drift',
+  '--update-graph',
+  '--no-write',
+  '--json-only'
+]);
+
+function parseCli(argv) {
+  const positionals = [];
+  const flags = new Map();
+  const seenBool = new Set();
+
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a.startsWith('--')) {
+      const eq = a.indexOf('=');
+      if (eq !== -1) {
+        const k = a.slice(0, eq);
+        const v = a.slice(eq + 1);
+        if (BOOLEAN_FLAGS.has(k)) {
+          if (v !== 'false' && v !== '0') seenBool.add(k);
+        } else {
+          flags.set(k, v);
+        }
+      } else if (BOOLEAN_FLAGS.has(a)) {
+        seenBool.add(a);
+      } else if (i + 1 < argv.length && !argv[i + 1].startsWith('--')) {
+        flags.set(a, argv[i + 1]);
+        i += 1;
+      } else {
+        seenBool.add(a);
+      }
+    } else {
+      positionals.push(a);
+    }
+  }
+  return { positionals, flags, seenBool };
+}
+
+const cli = parseCli(process.argv.slice(2));
+const command = cli.positionals[0] || 'validate';
 
 function getFlag(name, def = '') {
-  const idx = args.indexOf(name);
-  return idx !== -1 && idx + 1 < args.length ? args[idx + 1] : def;
+  return cli.flags.has(name) ? cli.flags.get(name) : def;
 }
 
 function hasFlag(name) {
-  return args.includes(name);
+  return cli.seenBool.has(name) || cli.flags.has(name);
+}
+
+function getNumberFlag(name, def) {
+  const raw = getFlag(name, String(def));
+  const num = Number(raw);
+  if (!Number.isFinite(num)) {
+    throw new Error(`Invalid numeric value for ${name}: "${raw}"`);
+  }
+  return num;
 }
 
 const workdir = path.resolve(getFlag('--workdir', process.env.DEVIN_PROJECT_DIR || process.cwd()));
 
 async function cmdMemory() {
-  const sub = args[1] || 'index';
+  const sub = cli.positionals[1] || 'index';
   switch (sub) {
     case 'init': {
       console.log(JSON.stringify(await initMemory(workdir), null, 2));
@@ -68,18 +118,19 @@ async function cmdMemory() {
       break;
     }
     case 'search': {
-      const query = getFlag('--query', args[2] || '');
+      const query = getFlag('--query', cli.positionals[2] || '');
       const res = await searchMemory(workdir, query, {
         kind: getFlag('--kind', '') || null,
         tag: getFlag('--tag', '') || null,
         includeStale: !hasFlag('--no-stale'),
-        limit: Number(getFlag('--limit', '10'))
+        limit: getNumberFlag('--limit', 10)
       });
       console.log(JSON.stringify(res, null, 2));
       break;
     }
     case 'read': {
-      const id = args[2] || getFlag('--id', '');
+      const id = getFlag('--id', cli.positionals[2] || '');
+      if (!id) throw new Error('Usage: forge-cli.mjs memory read <id> [--section <sec>]');
       const section = getFlag('--section', '') || null;
       console.log(JSON.stringify(await readMemoryDoc(workdir, id, section), null, 2));
       break;
@@ -92,7 +143,7 @@ async function cmdMemory() {
       break;
     }
     case 'adr': {
-      const title = getFlag('--title', args[2] || '');
+      const title = getFlag('--title', cli.positionals[2] || '');
       const context = getFlag('--context', 'Context recorded via forge-cli.');
       const decision = getFlag('--decision', 'Decision recorded via forge-cli.');
       const consequences = getFlag('--consequences', 'Consequences documented.');
@@ -101,7 +152,8 @@ async function cmdMemory() {
       break;
     }
     case 'retire': {
-      const id = args[2] || getFlag('--id', '');
+      const id = getFlag('--id', cli.positionals[2] || '');
+      if (!id) throw new Error('Usage: forge-cli.mjs memory retire <id> [--status deprecated|superseded]');
       console.log(JSON.stringify(await retireMemoryDoc(workdir, id, {
         status: getFlag('--status', 'deprecated'),
         supersededBy: getFlag('--superseded-by', '') || null
@@ -125,7 +177,7 @@ async function cmdMemory() {
 }
 
 function cmdSkill() {
-  const sub = args[1] || 'validate';
+  const sub = cli.positionals[1] || 'validate';
   if (sub === 'scaffold') {
     const targetDir = resolveSkillTargetDir({
       scope: getFlag('--scope', 'project'),
@@ -134,7 +186,7 @@ function cmdSkill() {
       pluginRoot
     });
     const res = scaffoldSkill(targetDir, {
-      name: getFlag('--name', args[2] || ''),
+      name: getFlag('--name', cli.positionals[2] || ''),
       description: getFlag('--description', 'Standardized SkillOps skill generated by harness-forge.'),
       authorityProfile: getFlag('--authority', 'scoped_worker')
     });
@@ -143,21 +195,25 @@ function cmdSkill() {
     }
     console.log(JSON.stringify(res, null, 2));
   } else if (sub === 'analyze-legacy') {
-    const target = args[2] || getFlag('--path', '');
+    const target = getFlag('--path', cli.positionals[2] || '');
+    if (!target) throw new Error('Usage: forge-cli.mjs skill analyze-legacy <path>');
     console.log(JSON.stringify(analyzeLegacySkill(path.resolve(workdir, target)), null, 2));
   } else if (sub === 'triage') {
-    const target = getFlag('--target', args[2] && !args[2].startsWith('--') ? args[2] : '');
+    const target = getFlag('--target', cli.positionals[2] || '');
     console.log(JSON.stringify(triageSkills({ targetPath: target, workspaceRoot: workdir }), null, 2));
-  } else {
-    const target = args[2] || getFlag('--dir', '.');
+  } else if (sub === 'validate') {
+    const target = getFlag('--dir', cli.positionals[2] || '.');
     const res = validateSkillDir(path.resolve(workdir, target));
     console.log(JSON.stringify(res, null, 2));
     if (!res.ok) process.exit(2);
+  } else {
+    console.error(`Unknown skill subcommand: ${sub}`);
+    process.exit(1);
   }
 }
 
 function cmdSkillOps() {
-  const sub = args[1] || 'audit';
+  const sub = cli.positionals[1] || 'audit';
   const skillsDir = path.resolve(workdir, getFlag('--skills-dir', '.agents/skills'));
   if (sub === 'graph') {
     const graph = buildEcosystemGraph(skillsDir, { write: !hasFlag('--no-write') });
@@ -165,7 +221,7 @@ function cmdSkillOps() {
   } else if (sub === 'telemetry') {
     const telPath = getFlag('--file', path.join(workdir, '.agents', 'teamwork', 'skill-telemetry.jsonl'));
     console.log(JSON.stringify(summarizeTelemetry(path.resolve(workdir, telPath)), null, 2));
-  } else {
+  } else if (sub === 'audit') {
     const telFlag = getFlag('--telemetry', '');
     const report = auditSkills(skillsDir, {
       strict: hasFlag('--strict'),
@@ -181,11 +237,16 @@ function cmdSkillOps() {
       maintenanceActions: report.maintenanceActions
     }, null, 2));
     if (!report.ok) process.exit(2);
+  } else {
+    console.error(`Unknown skillops subcommand: ${sub}`);
+    process.exit(1);
   }
 }
 
 function cmdValidate() {
+  const strict = hasFlag('--strict');
   const errors = [];
+  const warnings = [];
   const memRoot = resolveMemoryRoot(workdir);
   let memEntries = 0;
   if (fs.existsSync(memRoot)) {
@@ -197,13 +258,19 @@ function cmdValidate() {
   const projectSkillsDir = path.join(workdir, '.agents', 'skills');
   let skillCount = 0;
   if (fs.existsSync(projectSkillsDir)) {
-    const skAudit = auditSkills(projectSkillsDir, { strict: hasFlag('--strict') });
+    const skAudit = auditSkills(projectSkillsDir, { strict });
     skillCount = skAudit.totalSkills;
-    if (!skAudit.ok) errors.push(...skAudit.errors);
+    if (!skAudit.ok) {
+      if (skAudit.errors.length > 0) errors.push(...skAudit.errors);
+      if (strict && skAudit.warnings.length > 0) {
+        errors.push(...skAudit.warnings.map((w) => `[STRICT WARNING] ${w}`));
+      }
+    }
+    warnings.push(...skAudit.warnings);
   }
 
   const ok = errors.length === 0;
-  console.log(JSON.stringify({ ok, memoryEntries: memEntries, projectSkills: skillCount, errors }, null, 2));
+  console.log(JSON.stringify({ ok, memoryEntries: memEntries, projectSkills: skillCount, errors, warnings }, null, 2));
   if (!ok) process.exit(2);
 }
 
@@ -211,21 +278,55 @@ async function cmdEvalSkills() {
   const suite = getFlag('--suite', path.join(workdir, 'tests', 'evals', 'skill-use'));
   const report = await runSkillUseEval(suite, workdir);
   console.log(JSON.stringify(report, null, 2));
-  const minScore = Number(getFlag('--min-score', '0'));
+  const minScore = getNumberFlag('--min-score', 0);
   if (report.metrics.su_score < minScore) {
     process.exit(2);
   }
 }
 
+function shSingleQuote(val) {
+  return `'${String(val).replace(/'/g, `'\\''`)}'`;
+}
+
 function cmdInstallGitHook() {
-  const gitHooksDir = path.join(workdir, '.git', 'hooks');
-  if (!fs.existsSync(gitHooksDir)) {
-    console.error(`No .git/hooks directory found at ${workdir}`);
-    process.exit(2);
+  let gitHooksDir = '';
+  try {
+    const relOrAbs = execFileSync('git', ['rev-parse', '--git-path', 'hooks'], {
+      cwd: workdir,
+      encoding: 'utf8',
+      stdio: 'pipe'
+    }).trim();
+    gitHooksDir = path.resolve(workdir, relOrAbs);
+  } catch {
+    gitHooksDir = path.join(workdir, '.git', 'hooks');
   }
+
+  if (!fs.existsSync(gitHooksDir)) {
+    const gitDir = path.join(workdir, '.git');
+    if (fs.existsSync(gitDir)) {
+      fs.mkdirSync(gitHooksDir, { recursive: true });
+    } else {
+      console.error(`No Git repository / .git/hooks found at ${workdir}`);
+      process.exit(2);
+    }
+  }
+
   const hookPath = path.join(gitHooksDir, 'pre-commit');
-  const script = `#!/bin/sh\nnode "${__filename.replace(/\\/g, '/')}" validate --workdir "${workdir.replace(/\\/g, '/')}" --strict\n`;
-  fs.writeFileSync(hookPath, script, 'utf8');
+  const block = [
+    '# BEGIN harness-forge',
+    `node ${shSingleQuote(__filename.replace(/\\/g, '/'))} validate --workdir ${shSingleQuote(workdir.replace(/\\/g, '/'))} --strict || exit $?`,
+    '# END harness-forge',
+    ''
+  ].join('\n');
+
+  let nextContent = `#!/bin/sh\n${block}`;
+  if (fs.existsSync(hookPath)) {
+    const existing = fs.readFileSync(hookPath, 'utf8').replace(/\r\n/g, '\n');
+    const cleaned = existing.replace(/\n?# BEGIN harness-forge[\s\S]*?# END harness-forge\n?/g, '\n').trimEnd();
+    nextContent = cleaned ? `${cleaned}\n\n${block}` : `#!/bin/sh\n${block}`;
+  }
+
+  fs.writeFileSync(hookPath, nextContent, 'utf8');
   try {
     fs.chmodSync(hookPath, 0o755);
   } catch {
@@ -252,9 +353,11 @@ async function main() {
       cmdInstallGitHook();
       break;
     case 'validate':
-    default:
       cmdValidate();
       break;
+    default:
+      console.error(`Unknown forge-cli command: ${command}`);
+      process.exit(1);
   }
 }
 

@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "$schema": "../../scripts/core/schemas/skill-contract.v1.json",
   "name": "team-worktree",
   "version": "1.0.0",
   "description": "Provision, inspect, merge (after CLEAN Gate), and prune isolated Git Worktrees for concurrent milestone workers.",

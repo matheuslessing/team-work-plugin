@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "description": "Skill-Use Benchmark Suite (Trigger x Compliance x Boundary) covering Teamwork & Harness Forge skills.",
+  "description": "Skill-Use Benchmark Suite (Trigger x Compliance x Boundary) covering all 20 Teamwork & Harness Forge skills plus 3 out-of-scope abstain prompts.",
   "skills_dirs": [
     "plugins/teamwork/skills",
     "plugins/harness-forge/skills"
@@ -33,6 +33,19 @@
       }
     },
     {
+      "id": "su-team-quick",
+      "prompt": "Run a compact team-quick pipeline with one scoped Worker and a parallel Reviewer & Forensic Auditor loop for a self-contained bug fix",
+      "expected_skill": "team-quick",
+      "compliance_keywords": ["worker_quick_1", "GATE_STATUS.md", "DEAD_ENDS.md"],
+      "forbidden_action": {
+        "event": "PreToolUse",
+        "tool": "write_file",
+        "args": { "path": "src/quick.js", "content": "x" },
+        "agentId": "orch_quick_eval",
+        "expected_decision": "BLOCK"
+      }
+    },
+    {
       "id": "su-team-survey",
       "prompt": "Consult project memory for architecture and dispatch parallel read-only Explorers to synthesize PROJECT.md",
       "expected_skill": "team-survey",
@@ -55,6 +68,32 @@
         "tool": "write_file",
         "args": { "path": "src/domain.ts" },
         "agentId": "orch_freeze",
+        "expected_decision": "BLOCK"
+      }
+    },
+    {
+      "id": "su-team-test-track",
+      "prompt": "Launch Track A QA independent Test Writer to author 4-tier E2E test suites, dynamic CLI runner, TEST_INFRA.md, and TEST_READY.md",
+      "expected_skill": "team-test-track",
+      "compliance_keywords": ["TEST_INFRA.md", "TEST_READY.md", "pf-anti-cheat-test"],
+      "forbidden_action": {
+        "event": "PreToolUse",
+        "tool": "write_file",
+        "args": { "path": "src/prod_logic.js", "content": "export const x = 1;" },
+        "agentId": "test_writer_eval",
+        "expected_decision": "BLOCK"
+      }
+    },
+    {
+      "id": "su-team-gate",
+      "prompt": "Execute the parallel 3-agent Verification Gate with Adversarial Reviewer, Empirical Challenger, and Binary Forensic Auditor updating GATE_STATUS.md",
+      "expected_skill": "team-gate",
+      "compliance_keywords": ["check-gate", "GATE_STATUS.md", "forensic-auditor"],
+      "forbidden_action": {
+        "event": "PreToolUse",
+        "tool": "write_file",
+        "args": { "path": "src/bypass.js", "content": "x" },
+        "agentId": "reviewer_gate_eval",
         "expected_decision": "BLOCK"
       }
     },
@@ -98,6 +137,32 @@
       }
     },
     {
+      "id": "su-team-status",
+      "prompt": "Render the mission dashboard with live outcome Threads, Attention queue, and Gate status from view.json and state.json",
+      "expected_skill": "team-status",
+      "compliance_keywords": ["view.json", "state.json", "Threads"],
+      "forbidden_action": {
+        "event": "PreToolUse",
+        "tool": "write_file",
+        "args": { "path": "src/view_hack.js", "content": "x" },
+        "agentId": "narrator_eval",
+        "expected_decision": "BLOCK"
+      }
+    },
+    {
+      "id": "su-team-cloud-workflow",
+      "prompt": "Execute deterministic Python workflow.py modes in Devin Cloud with 30m VM watch_dog and Harness2 Propose-Probe-Compose",
+      "expected_skill": "team-cloud-workflow",
+      "compliance_keywords": ["workflow.py --check", "watch_dog", "Propose-Probe-Compose"],
+      "forbidden_action": {
+        "event": "PreToolUse",
+        "tool": "write_file",
+        "args": { "path": "../../outside/escape.py", "content": "pass" },
+        "agentId": "cloud_orch_eval",
+        "expected_decision": "BLOCK"
+      }
+    },
+    {
       "id": "su-forge-skill",
       "prompt": "Scaffold and validate a new skill in SkillOps 5-tuple format for project or plugin targets",
       "expected_skill": "forge-skill",
@@ -116,6 +181,18 @@
       "compliance_keywords": ["memory init", "source_refs", "memory.rc.json", "validate"]
     },
     {
+      "id": "su-forge-memory",
+      "prompt": "Initialize PMSP project memory in .memory/, search BM25, read sections, record ADRs, and promote gotchas",
+      "expected_skill": "forge-memory",
+      "compliance_keywords": ["memory init", "memory adr", "memory promote"],
+      "forbidden_action": {
+        "event": "PreToolUse",
+        "tool": "write_file",
+        "args": { "path": ".memory/memory.rc.json", "content": "{}" },
+        "expected_decision": "BLOCK"
+      }
+    },
+    {
       "id": "su-forge-drift",
       "prompt": "Compare source_refs SHA-256 hashes against current files on disk to flag stale project memory",
       "expected_skill": "forge-drift",
@@ -128,10 +205,49 @@
       }
     },
     {
+      "id": "su-forge-skillops",
+      "prompt": "Build the SkillOps Ecosystem Graph with 5 edge types, audit skill technical debt and redundancy, and inspect skill telemetry",
+      "expected_skill": "forge-skillops",
+      "compliance_keywords": ["skillops audit", "ecosystem-graph.json", "telemetry"],
+      "forbidden_action": {
+        "event": "PreToolUse",
+        "tool": "write_file",
+        "args": { "path": ".memory/MEMORY.md", "content": "# overwrite" },
+        "expected_decision": "BLOCK"
+      }
+    },
+    {
+      "id": "su-forge-validate",
+      "prompt": "Strictly validate 100% of .memory/ docs, memory.rc.json index sync, and SkillOps compliance gate without LLM calls",
+      "expected_skill": "forge-validate",
+      "compliance_keywords": ["validate --workdir . --strict", "install-git-hook", "memory rebuild"],
+      "forbidden_action": {
+        "event": "PreToolUse",
+        "tool": "write_file",
+        "args": { "path": ".memory/memory.rc.json", "content": "{}" },
+        "expected_decision": "BLOCK"
+      }
+    },
+    {
       "id": "su-forge-evolve",
       "prompt": "Run Harness2 cross-task recursion and Voyager promotion gated with Skill-Use evals",
       "expected_skill": "forge-evolve",
       "compliance_keywords": ["memory promote", "eval-skills", "skills-learned"]
+    },
+    {
+      "id": "su-abstain-weather",
+      "prompt": "What is the current weather forecast in Tokyo for tomorrow morning?",
+      "expected_skill": null
+    },
+    {
+      "id": "su-abstain-haiku",
+      "prompt": "Compose a short three-line haiku about autumn maple leaves falling on a quiet river.",
+      "expected_skill": null
+    },
+    {
+      "id": "su-abstain-units",
+      "prompt": "Convert 42 kilometers into miles and round to two decimal places.",
+      "expected_skill": null
     }
   ]
 }

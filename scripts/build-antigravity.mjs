@@ -18,7 +18,7 @@ function parseArgs(argv) {
   return { out };
 }
 
-/** Convert YAML list `globs:\n  - "a"\n  - "b"` into Antigravity string `globs: "a, b"`. */
+/** Convert YAML list `globs:\n  - "a"` or `globs: ["a", "b"]` into Antigravity string `globs: "a, b"`. */
 export function convertRuleForAntigravity(rawMd) {
   const normalized = rawMd.replace(/\r\n/g, '\n');
   if (!normalized.startsWith('---\n')) return rawMd;
@@ -32,6 +32,17 @@ export function convertRuleForAntigravity(rawMd) {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    const inlineMatch = line.match(/^globs:\s*\[([^\]]*)\]\s*$/);
+    if (inlineMatch) {
+      const items = inlineMatch[1]
+        .split(',')
+        .map((s) => s.trim().replace(/^["']|["']$/g, ''))
+        .filter(Boolean);
+      if (items.length > 0) {
+        outLines.push(`globs: "${items.join(', ')}"`);
+        continue;
+      }
+    }
     if (/^globs:\s*$/.test(line)) {
       const items = [];
       let j = i + 1;
@@ -52,17 +63,40 @@ export function convertRuleForAntigravity(rawMd) {
   return `---\n${outLines.join('\n')}\n---\n${body}`;
 }
 
+function isSameOrOverlappingPath(a, b) {
+  const pa = path.resolve(a);
+  const pb = path.resolve(b);
+  const cmpA = process.platform === 'win32' ? pa.toLowerCase() : pa;
+  const cmpB = process.platform === 'win32' ? pb.toLowerCase() : pb;
+  return (
+    cmpA === cmpB ||
+    cmpA.startsWith(cmpB + path.sep) ||
+    cmpB.startsWith(cmpA + path.sep)
+  );
+}
+
 export function buildAntigravityBundles(outDir = path.join(repoRoot, 'dist', 'antigravity')) {
   const plugins = ['teamwork', 'harness-forge'];
   const copyDirs = ['skills', 'agents', 'scripts', 'programs', 'mcp-server', 'templates'];
   const built = [];
+  const absOut = path.resolve(outDir);
+  const filterCopy = (src) => {
+    const base = path.basename(src);
+    return base !== '__pycache__' && !base.endsWith('.pyc');
+  };
 
-  fs.mkdirSync(outDir, { recursive: true });
+  fs.mkdirSync(absOut, { recursive: true });
 
   for (const name of plugins) {
     const srcRoot = path.join(repoRoot, 'plugins', name);
-    const destRoot = path.join(outDir, name);
+    const destRoot = path.join(absOut, name);
     const adapterDir = path.join(srcRoot, 'adapters', 'antigravity');
+
+    if (isSameOrOverlappingPath(destRoot, srcRoot) || isSameOrOverlappingPath(destRoot, repoRoot)) {
+      if (path.resolve(destRoot) === path.resolve(repoRoot) || isSameOrOverlappingPath(srcRoot, destRoot)) {
+        throw new Error(`Refusing unsafe Antigravity output path overlapping source repo: ${destRoot}`);
+      }
+    }
 
     fs.rmSync(destRoot, { recursive: true, force: true });
     fs.mkdirSync(destRoot, { recursive: true });
@@ -70,7 +104,7 @@ export function buildAntigravityBundles(outDir = path.join(repoRoot, 'dist', 'an
     for (const dir of copyDirs) {
       const srcSub = path.join(srcRoot, dir);
       if (fs.existsSync(srcSub)) {
-        fs.cpSync(srcSub, path.join(destRoot, dir), { recursive: true });
+        fs.cpSync(srcSub, path.join(destRoot, dir), { recursive: true, filter: filterCopy });
       }
     }
 
@@ -105,7 +139,13 @@ export function buildAntigravityBundles(outDir = path.join(repoRoot, 'dist', 'an
   return built;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+const isMain =
+  process.argv[1] &&
+  (process.platform === 'win32'
+    ? path.resolve(process.argv[1]).toLowerCase() === __filename.toLowerCase()
+    : path.resolve(process.argv[1]) === __filename);
+
+if (isMain) {
   const { out } = parseArgs(process.argv.slice(2));
   const built = buildAntigravityBundles(out);
   console.log(JSON.stringify({ ok: true, out, bundles: built }, null, 2));

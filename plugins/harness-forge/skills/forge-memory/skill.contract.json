@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "$schema": "../../scripts/core/schemas/skill-contract.v1.json",
   "name": "forge-memory",
   "version": "1.0.0",
   "description": "Initialize, query, record ADRs, and manage Project Memory (.memory/ + compiled memory.rc.json) with zero-trust validation.",
@@ -23,7 +23,7 @@
     { "cmd": "node ${PLUGIN_ROOT}/scripts/forge-cli.mjs validate --workdir . --strict" }
   ],
   "F_failure_modes": [
-    { "code": "MISSING_SOURCE_REF", "action": "BLOCK_UPSERT", "route_to": "forge:memory-curator" },
+    { "code": "MISSING_SOURCE_REF", "action": "BLOCK_UPSERT", "route_to": "harness-forge:memory-curator" },
     { "code": "RCJSON_MANUAL_EDIT", "action": "BLOCK_TOOL", "route_to": "memory_rebuild" }
   ],
   "ecosystem_edges": {

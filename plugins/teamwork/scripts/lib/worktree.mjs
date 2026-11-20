@@ -2,10 +2,10 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { normalizePosix } from '../core/frontmatter.mjs';
-import { getActiveOrchestrator, getTeamworkRoot } from './state-machine.mjs';
+import { evaluateLatestGate, getActiveOrchestrator, getTeamworkRoot } from './state-machine.mjs';
 
 function runGit(workdir, gitArgs) {
-  return execFileSync('git', gitArgs, { cwd: workdir, encoding: 'utf8', stdio: 'pipe' }).trim();
+  return execFileSync('git', gitArgs, { cwd: workdir, encoding: 'utf8', stdio: 'pipe' }).trimEnd();
 }
 
 export function getWorktreePaths(workdir, agentId) {
@@ -18,7 +18,14 @@ export function getWorktreePaths(workdir, agentId) {
 export function createWorktree(workdir, agentId, { baseRef = 'HEAD' } = {}) {
   const { root, wtDir, branch } = getWorktreePaths(workdir, agentId);
   if (fs.existsSync(wtDir)) {
-    return { created: false, wtDir: normalizePosix(wtDir), branch, note: 'Worktree already exists' };
+    if (fs.existsSync(path.join(wtDir, '.git'))) {
+      return { created: false, wtDir: normalizePosix(wtDir), branch, note: 'Worktree already exists' };
+    }
+    const leftovers = fs.readdirSync(wtDir);
+    if (leftovers.length > 0) {
+      throw new Error(`Refusing to overwrite non-empty directory without .git at ${wtDir}`);
+    }
+    fs.rmSync(wtDir, { recursive: true, force: true });
   }
 
   let branchExists = false;
@@ -59,10 +66,11 @@ export function worktreeStatus(workdir) {
 
 export function worktreeDiff(workdir, agentId) {
   const { root, wtDir, branch } = getWorktreePaths(workdir, agentId);
-  const statusOut = fs.existsSync(wtDir) ? runGit(wtDir, ['status', '--short']) : '';
+  const hasWtGit = fs.existsSync(path.join(wtDir, '.git'));
+  const statusOut = hasWtGit ? runGit(wtDir, ['status', '--short']) : '';
   let diffFiles = [];
   try {
-    const names = runGit(root, ['diff', '--name-only', `HEAD..${branch}`]);
+    const names = runGit(root, ['diff', '--name-only', `HEAD...${branch}`]);
     diffFiles = names ? names.split(/\r?\n/).filter(Boolean) : [];
   } catch {
     diffFiles = [];
@@ -74,12 +82,7 @@ function isGatePassing(workdir) {
   const active = getActiveOrchestrator(workdir);
   const gatePath = path.join(getTeamworkRoot(workdir), active.id, 'GATE_STATUS.md');
   if (!fs.existsSync(gatePath)) return false;
-  const content = fs.readFileSync(gatePath, 'utf8');
-  const latest = content.split(/^##\s+Gate/im).pop() || '';
-  const hasViolation = /INTEGRITY[_\s]VIOLATION/i.test(latest);
-  const hasRequestChanges = /REQUEST_CHANGES/i.test(latest);
-  const hasClean = /\bCLEAN\b/i.test(latest);
-  return !hasViolation && !hasRequestChanges && hasClean;
+  return evaluateLatestGate(fs.readFileSync(gatePath, 'utf8')).passed;
 }
 
 export function mergeWorktree(workdir, agentId, { requireGate = true } = {}) {
@@ -87,7 +90,7 @@ export function mergeWorktree(workdir, agentId, { requireGate = true } = {}) {
   if (requireGate && !isGatePassing(root)) {
     throw new Error(`Refusing to merge ${branch}: Verification Gate is not CLEAN/PASS.`);
   }
-  const mainDirty = runGit(root, ['status', '--porcelain', '--untracked-files=no']);
+  const mainDirty = runGit(root, ['status', '--porcelain', '--untracked-files=no']).trim();
   if (mainDirty) {
     const files = mainDirty
       .split(/\r?\n/)
@@ -98,21 +101,43 @@ export function mergeWorktree(workdir, agentId, { requireGate = true } = {}) {
       `Refusing to merge ${branch}: main worktree has uncommitted tracked changes (${files}). Commit or stash them before merging.`
     );
   }
-  if (fs.existsSync(wtDir)) {
-    const dirty = runGit(wtDir, ['status', '--porcelain']);
-    if (dirty) {
-      runGit(wtDir, ['add', '-A']);
+  if (fs.existsSync(path.join(wtDir, '.git'))) {
+    const dirtyRaw = runGit(wtDir, ['status', '--porcelain', '-uall']);
+    const dirtyPaths = dirtyRaw
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((line) => {
+        const rawPath = line.slice(3).trim();
+        const finalPath = rawPath.includes(' -> ') ? rawPath.split(' -> ').pop() : rawPath;
+        return finalPath.replace(/^"|"$/g, '');
+      })
+      .filter((p) => p && !p.startsWith('.agents/') && p !== '.agents');
+    if (dirtyPaths.length > 0) {
+      runGit(wtDir, ['add', '-A', '--', ...dirtyPaths]);
       runGit(wtDir, ['commit', '-m', `chore(teamwork): snapshot ${agentId} milestone changes`]);
     }
   }
-  runGit(root, ['merge', '--no-ff', branch, '-m', `feat(teamwork): merge ${agentId} (${branch})`]);
+  try {
+    runGit(root, ['merge', '--no-ff', branch, '-m', `feat(teamwork): merge ${agentId} (${branch})`]);
+  } catch (err) {
+    try {
+      runGit(root, ['merge', '--abort']);
+    } catch {
+      // ignore if merge state already clean
+    }
+    throw err;
+  }
   return { merged: true, branch };
 }
 
 export function pruneWorktree(workdir, agentId, { deleteBranch = false } = {}) {
   const { root, wtDir, branch } = getWorktreePaths(workdir, agentId);
   if (fs.existsSync(wtDir)) {
-    runGit(root, ['worktree', 'remove', '--force', wtDir]);
+    if (fs.existsSync(path.join(wtDir, '.git'))) {
+      runGit(root, ['worktree', 'remove', '--force', wtDir]);
+    } else if (fs.readdirSync(wtDir).length === 0) {
+      fs.rmSync(wtDir, { recursive: true, force: true });
+    }
   }
   runGit(root, ['worktree', 'prune']);
   if (deleteBranch) {

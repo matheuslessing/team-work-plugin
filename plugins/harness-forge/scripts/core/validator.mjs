@@ -83,6 +83,29 @@ export function validateSkillDir(skillDir) {
     errors.push(`Invalid JSON in skill.contract.json: ${err.message}`);
     return { ok: false, errors, warnings, meta: { folderName } };
   }
+  if (!contract || typeof contract !== 'object' || Array.isArray(contract)) {
+    errors.push('skill.contract.json must be a JSON object');
+    return { ok: false, errors, warnings, meta: { folderName } };
+  }
+
+  for (const subDir of ['references', 'scripts']) {
+    const subRoot = path.join(absDir, subDir);
+    if (!fs.existsSync(subRoot)) continue;
+    const scanWalk = (dir) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (['.git', 'node_modules', '__pycache__'].includes(entry.name)) continue;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) scanWalk(full);
+        else if (entry.isFile()) {
+          const sec = scanPromptSecurity(fs.readFileSync(full, 'utf8'), { filePath: normalizePosix(path.relative(absDir, full)) });
+          for (const f of sec.findings) {
+            errors.push(`[SECURITY:${f.code}] ${normalizePosix(path.relative(absDir, full))}:${f.line} — ${f.message}`);
+          }
+        }
+      }
+    };
+    scanWalk(subRoot);
+  }
 
   const requiredFields = [
     'name',
@@ -235,6 +258,8 @@ export function validateMemoryDoc(filePath, content, workspaceRoot, { checkDisk 
           errors.push(`${filePath}: source_refs[${idx}].path "${ref.path}" escapes workspaceRoot`);
         } else if (!fs.existsSync(resolvedRef)) {
           errors.push(`${filePath}: source_refs[${idx}].path "${ref.path}" does not exist on disk`);
+        } else if (!fs.statSync(resolvedRef).isFile()) {
+          errors.push(`${filePath}: source_refs[${idx}].path "${ref.path}" must point to a file, not a directory`);
         }
       }
     }
@@ -254,6 +279,11 @@ export function validateHandoff(filePath, content, { requireVerdict = false, che
   const errors = [];
   const warnings = [];
   const text = String(content || '').replace(/\r\n/g, '\n');
+  const sec = scanPromptSecurity(text, { filePath });
+  for (const f of sec.findings) {
+    errors.push(`[SECURITY:${f.code}] line ${f.line} — ${f.message}`);
+  }
+  const fenceStripped = text.replace(/```[\s\S]*?```/g, (m) => m.replace(/[^\n]/g, ''));
 
   const sectionSpecs = [
     { key: '1. Observation', regex: /^##\s+(?:1\.\s*)?Observation\s*$/im },
@@ -265,7 +295,7 @@ export function validateHandoff(filePath, content, { requireVerdict = false, che
 
   const found = [];
   for (const spec of sectionSpecs) {
-    const m = spec.regex.exec(text);
+    const m = spec.regex.exec(fenceStripped);
     if (!m) {
       errors.push(`Missing section "${spec.key}"`);
     } else {
@@ -274,26 +304,31 @@ export function validateHandoff(filePath, content, { requireVerdict = false, che
   }
 
   found.sort((a, b) => a.index - b.index);
+  const sectionBodies = new Map();
   for (let i = 0; i < found.length; i++) {
     const start = found[i].index + found[i].length;
-    const end = i + 1 < found.length ? found[i + 1].index : text.length;
-    const body = text.slice(start, end).replace(/[-`*\s]/g, '');
+    const end = i + 1 < found.length ? found[i + 1].index : fenceStripped.length;
+    const rawBody = fenceStripped.slice(start, end);
+    sectionBodies.set(found[i].key, rawBody);
+    const body = rawBody.replace(/[-`*\s]/g, '');
     if (body.length < 3) {
       errors.push(`Section "${found[i].key}" is empty`);
     }
   }
 
-  if (!/Invalidation Condition/i.test(text)) {
+  const sec5Body = sectionBodies.get('5. Verification Method') || '';
+  if (!/Invalidation Condition/i.test(sec5Body)) {
     errors.push('Missing explicit "Invalidation Conditions" in Section 5');
   }
 
   let verdict = null;
-  const verdictMatch = text.match(/\b(APPROVE|REQUEST_CHANGES|CLEAN|INTEGRITY[_\s]VIOLATION|REJECT)\b/);
+  const sec4Body = sectionBodies.get('4. Conclusion') || '';
+  const verdictMatch = sec4Body.match(/\b(INTEGRITY[_\s]VIOLATION|REQUEST_CHANGES|REJECT|APPROVE|CLEAN)\b/);
   if (verdictMatch) {
     verdict = verdictMatch[1].replace('_', ' ');
   }
   if (requireVerdict && !verdict) {
-    errors.push('Missing formal binary verdict (APPROVE | REQUEST_CHANGES | CLEAN | INTEGRITY VIOLATION | REJECT)');
+    errors.push('Missing formal binary verdict in Section 4 (APPROVE | REQUEST_CHANGES | CLEAN | INTEGRITY VIOLATION | REJECT)');
   }
 
   if (checkFiles && workspaceRoot) {
@@ -309,6 +344,36 @@ export function validateHandoff(filePath, content, { requireVerdict = false, che
   }
 
   return { ok: errors.length === 0, errors, warnings, verdict };
+}
+
+/**
+ * Single authoritative parser for GATE_STATUS.md verdicts used across CLI, worktree, view, and hooks.
+ * Evaluates ONLY the latest `## Gate` iteration header & verdict table (never prose in `### Defects`).
+ */
+export function evaluateLatestGate(gateContent) {
+  const normalized = String(gateContent || '').replace(/\r\n/g, '\n');
+  if (!normalized.trim()) {
+    return { passed: false, failed: false, pending: true, hasIntegrityViolation: false };
+  }
+  const sections = normalized.split(/^##\s+Gate\b/im);
+  const latest = sections[sections.length - 1] || normalized;
+  const headerAndTable = latest.split(/^###\s+Defects\b/im)[0];
+
+  const hasIntegrityViolation = /\bINTEGRITY[_\s]VIOLATION\b/i.test(headerAndTable);
+  const hasExplicitFail =
+    /Gate Result:\s*\*{0,2}(?:FAIL|REJECT)\*{0,2}/i.test(headerAndTable) ||
+    /\b(?:INTEGRITY[_\s]VIOLATION|REQUEST_CHANGES|REJECT)\b/i.test(headerAndTable);
+  const hasPending = /Gate Result:\s*\*{0,2}PENDING\*{0,2}/i.test(headerAndTable);
+  const hasExplicitPass = /Gate Result:\s*\*{0,2}PASS\*{0,2}/i.test(headerAndTable);
+  const hasPositiveVerdict = /\b(?:CLEAN|APPROVE)\b/i.test(headerAndTable);
+  const passed = (hasExplicitPass || hasPositiveVerdict) && !hasExplicitFail && !hasPending;
+
+  return {
+    passed,
+    failed: hasExplicitFail,
+    pending: !hasExplicitFail && (hasPending || !passed),
+    hasIntegrityViolation
+  };
 }
 
 function collectMemoryMarkdownFiles(memoryRoot) {
@@ -337,10 +402,23 @@ export function validateMemoryIndexSync(memoryRoot, workspaceRoot = null) {
   }
 
   let rc = null;
+  const rcRaw = fs.readFileSync(rcPath, 'utf8');
+  const rcSec = scanPromptSecurity(rcRaw, { filePath: 'memory.rc.json' });
+  for (const f of rcSec.findings) {
+    errors.push(`[SECURITY:${f.code}] memory.rc.json:${f.line} — ${f.message}`);
+  }
   try {
-    rc = JSON.parse(fs.readFileSync(rcPath, 'utf8'));
+    rc = JSON.parse(rcRaw);
   } catch (err) {
     return { ok: false, errors: [`Invalid JSON in memory.rc.json: ${err.message}`], entries: [] };
+  }
+
+  const memoryMdPath = path.join(memoryRoot, 'MEMORY.md');
+  if (fs.existsSync(memoryMdPath)) {
+    const mdSec = scanPromptSecurity(fs.readFileSync(memoryMdPath, 'utf8'), { filePath: 'MEMORY.md' });
+    for (const f of mdSec.findings) {
+      errors.push(`[SECURITY:${f.code}] MEMORY.md:${f.line} — ${f.message}`);
+    }
   }
 
   for (const key of ['schema_version', 'generated_at', 'memory_root', 'git_head', 'entries']) {
@@ -371,7 +449,15 @@ export function validateMemoryIndexSync(memoryRoot, workspaceRoot = null) {
     });
   }
 
-  const rcByPath = new Map(rc.entries.map((e) => [normalizePosix(e.path), e]));
+  const rcByPath = new Map();
+  for (const e of rc.entries) {
+    const relKey = normalizePosix(e?.path || '');
+    if (rcByPath.has(relKey)) {
+      errors.push(`memory.rc.json contains duplicate entry for "${relKey}" (run memory rebuild)`);
+    } else {
+      rcByPath.set(relKey, e);
+    }
+  }
   for (const [rel, meta] of diskByPath.entries()) {
     const entry = rcByPath.get(rel);
     if (!entry) {
@@ -379,6 +465,9 @@ export function validateMemoryIndexSync(memoryRoot, workspaceRoot = null) {
     } else {
       if (!entry.content_sha256 || entry.content_sha256 !== meta.content_sha256) {
         errors.push(`memory.rc.json out of sync: hash mismatch for "${rel}" (run memory rebuild)`);
+      }
+      if (!VALID_MEMORY_STATUS.has(entry.status)) {
+        errors.push(`memory.rc.json invalid status "${entry.status}" for "${rel}"`);
       }
       if (entry.id !== meta.id || entry.kind !== meta.kind || (entry.summary || '') !== meta.summary) {
         errors.push(`memory.rc.json out of sync: metadata mismatch for "${rel}" (run memory rebuild)`);

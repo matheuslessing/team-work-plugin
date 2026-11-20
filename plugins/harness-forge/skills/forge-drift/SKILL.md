@@ -21,5 +21,5 @@ Prevent agents from trusting outdated documentation by verifying SHA-256 prefixe
    ```bash
    node "${PLUGIN_ROOT}/scripts/forge-cli.mjs" memory drift --workdir .
    ```
-2. For each stale entry, inspect the changed code file and spawn `forge:memory-curator` (or call `memory_upsert`) to refresh the `.md` doc and reset `stale: false`.
+2. For each stale entry, inspect the changed code file and spawn `harness-forge:memory-curator` (or call `memory_upsert`) to refresh the `.md` doc and reset `stale: false`.
 3. Retire obsolete docs cleanly with `memory retire <id> --status superseded --superseded-by <new_id>`.

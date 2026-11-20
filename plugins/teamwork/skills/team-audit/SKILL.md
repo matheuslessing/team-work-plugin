@@ -25,4 +25,4 @@ Zero-tolerance forensic audit holding binary veto power (`🟢 CLEAN` vs `🔴 I
    - **Production authenticity**: zero `TODO` throws / `NotImplementedError` stubs or test lookup tables.
    - **Test authenticity**: every test imports/invokes real production code (zero local mock classes/lambdas, zero skipped tests).
    - **Live test runner**: dynamically executes test suite and exits non-zero on failure.
-3. Write `<working_dir>/audit_report.md` and 5-Component `handoff.md` (`teamwork-cli.mjs validate-handoff --require-verdict`).
+3. Write `<working_dir>/audit_report.md` and 5-Component `handoff.md` (`teamwork-cli.mjs validate-handoff <working_dir>/handoff.md --require-verdict`).

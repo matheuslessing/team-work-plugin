@@ -15,11 +15,11 @@ triggers:
 
 # Forge PMSP Project Memory (`/forge-memory`)
 
-Manage the repository's 4-layer Project Memory (`.memory/`) backed by compiled `memory.rc.json`, `MEMORY.md`, and local BM25/SQLite search.
+Manage the repository's 4-layer Project Memory (`.memory/`) backed by compiled `memory.rc.json`, `MEMORY.md`, and local BM25 search.
 
 ## Hard Rules (Enforced by HASP + MCP)
 - **NEVER edit `memory.rc.json`, `MEMORY.md`, or `.memory/.cache/*` directly** (`pf-rcjson-readonly` blocks direct edits).
-- Always write via MCP (`memory_upsert` / `memory_record_adr`) OR write valid frontmatter `.md` files and let `pf-memory-guard` / `forge-cli.mjs memory rebuild` compile `memory.rc.json`.
+- Always write via MCP (`memory_upsert` / `memory_record_adr` / `memory_promote`) OR write valid frontmatter `.md` files and let `pf-memory-guard` / `forge-cli.mjs memory rebuild` compile `memory.rc.json`.
 
 ## Operations
 - **Initialize**: `node "${PLUGIN_ROOT}/scripts/forge-cli.mjs" memory init --workdir .`

@@ -1,0 +1,20 @@
+{
+  "name": "teamwork-suite",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Teamwork v2 + Harness Forge multi-plugin suite (zero external runtime dependencies).",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "sync-core": "node scripts/sync-core.mjs",
+    "sync-core:check": "node scripts/sync-core.mjs --check",
+    "build:antigravity": "node scripts/build-antigravity.mjs",
+    "test": "node --test tests/phase1-core-state.test.mjs tests/phase2-hasp-forensic.test.mjs tests/phase3-swarm-worktree.test.mjs tests/phase4-memory-mcp.test.mjs tests/phase5-dogfood-skillops-evals.test.mjs",
+    "validate:real-env": "node scripts/validate-real-env.mjs",
+    "validate:ci": "node scripts/validate-real-env.mjs --skip-cli",
+    "audit:skills": "node plugins/harness-forge/scripts/forge-cli.mjs skillops audit --skills-dir plugins/teamwork/skills --strict && node plugins/harness-forge/scripts/forge-cli.mjs skillops audit --skills-dir plugins/harness-forge/skills --strict",
+    "eval:skills": "node plugins/harness-forge/scripts/forge-cli.mjs eval-skills --suite tests/evals/skill-use --min-score 0.90"
+  }
+}
