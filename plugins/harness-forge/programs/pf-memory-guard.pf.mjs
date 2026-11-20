@@ -1,22 +1,24 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { normalizePosix } from '../scripts/core/frontmatter.mjs';
+import {
+  EDIT_TOOLS,
+  EXEC_TOOLS,
+  extractCommand,
+  extractPathsFromCommand,
+  extractTargetPath,
+  isMutatingShellCommand
+} from '../scripts/core/hasp-runner.mjs';
 import { validateMemoryDoc, validateMemoryIndexSync } from '../scripts/core/validator.mjs';
 import { rebuildIndex, resolveMemoryRoot } from '../scripts/lib/memory-engine.mjs';
 
 export const meta = {
   id: 'pf-memory-guard',
-  version: '1.0.0',
+  version: '1.1.0',
   events: ['PreToolUse', 'PostToolUse', 'Stop']
 };
 
-const EDIT_TOOLS = new Set(['edit', 'write_file', 'edit_file', 'Write', 'Edit']);
 const MEMORY_FOLDERS = new Set(['architecture', 'decisions', 'contracts', 'gotchas']);
-
-function extractTargetPath(action) {
-  const args = action?.args || {};
-  return args.path || args.Path || args.file_path || args.filePath || args.target || '';
-}
 
 function isManagedMemoryMarkdown(workdir, target) {
   if (!target) return false;
@@ -28,14 +30,27 @@ function isManagedMemoryMarkdown(workdir, target) {
   return MEMORY_FOLDERS.has(topDir);
 }
 
+function getManagedExecMdPaths(workdir, cmd) {
+  if (!cmd || /\bforge-cli\.mjs\b/i.test(cmd) || !isMutatingShellCommand(cmd)) return [];
+  return extractPathsFromCommand(cmd, /(?:[A-Za-z]:)?[A-Za-z0-9_./\\-]+\.md/g).filter(
+    (p) => isManagedMemoryMarkdown(workdir, p) && fs.existsSync(path.resolve(workdir, p))
+  );
+}
+
 export function should_activate(state, action) {
   const workdir = path.resolve(state.workdir || process.cwd());
   if (action?.event === 'Stop') {
     const memRoot = resolveMemoryRoot(workdir);
     return fs.existsSync(memRoot);
   }
-  if (!EDIT_TOOLS.has(action?.tool || '')) return false;
-  return isManagedMemoryMarkdown(workdir, extractTargetPath(action));
+  const tool = action?.tool || '';
+  if (EDIT_TOOLS.has(tool)) {
+    return isManagedMemoryMarkdown(workdir, extractTargetPath(action));
+  }
+  if (action?.event === 'PostToolUse' && EXEC_TOOLS.has(tool)) {
+    return getManagedExecMdPaths(workdir, extractCommand(action)).length > 0;
+  }
+  return false;
 }
 
 export async function intervene(state, action) {
@@ -51,6 +66,34 @@ export async function intervene(state, action) {
       };
     }
     return { type: 'ALLOW' };
+  }
+
+  if (action?.event === 'PostToolUse' && EXEC_TOOLS.has(action?.tool || '')) {
+    const targets = getManagedExecMdPaths(workdir, extractCommand(action));
+    if (targets.length === 0) return { type: 'NOOP' };
+    const allErrors = [];
+    const validatedRels = [];
+    for (const t of targets) {
+      const abs = path.resolve(workdir, t);
+      const rel = normalizePosix(path.relative(memRoot, abs));
+      const raw = fs.readFileSync(abs, 'utf8');
+      const res = validateMemoryDoc(rel, raw, workdir, { checkDisk: true });
+      if (!res.ok) allErrors.push(...res.errors);
+      else validatedRels.push(rel);
+    }
+    if (allErrors.length > 0) {
+      return {
+        type: 'INJECT_CONTEXT',
+        reason: `Memory document(s) violated PMSP schema`,
+        payload: `[HASP:pf-memory-guard] Fix ${validatedRels.concat(targets).join(', ')} before finishing:\n- ${allErrors.join('\n- ')}`
+      };
+    }
+    await rebuildIndex(workdir);
+    return {
+      type: 'INJECT_CONTEXT',
+      reason: `Recompiled memory.rc.json after valid update to ${validatedRels.join(', ')}`,
+      payload: `[HASP:pf-memory-guard] Validated ${validatedRels.join(', ')} and deterministically recompiled memory.rc.json.`
+    };
   }
 
   const target = extractTargetPath(action);

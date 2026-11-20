@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { estimateTokens, normalizePosix, parseFrontmatter, sha256Hex } from './frontmatter.mjs';
+import { estimateTokens, normalizePosix, parseFrontmatter, sha256Text } from './frontmatter.mjs';
 import { scanPromptSecurity } from './security-scanner.mjs';
 
 const KEBAB_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -367,7 +367,7 @@ export function validateMemoryIndexSync(memoryRoot, workspaceRoot = null) {
       kind: docCheck.data.kind,
       summary: docCheck.data.summary || '',
       tags: Array.isArray(docCheck.data.tags) ? docCheck.data.tags : [],
-      content_sha256: sha256Hex(raw)
+      content_sha256: sha256Text(raw)
     });
   }
 

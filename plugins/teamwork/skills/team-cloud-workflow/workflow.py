@@ -6,7 +6,7 @@ Includes:
   - Deterministic `GATE_STATUS.md` generation from structured verdicts
   - Gate-failure safety barrier (never runs Victory Audit when Gate fails)
   - Harness² Task-Level Recursion (`propose_probe_compose` with k=2 parallel candidates)
-  - Model tiering (`MODEL_TIERS`) and multi-turn Reviewer continuity
+  - Model tiering (`AGENT_MODES`) and multi-turn Reviewer continuity
 
 Supports 4 workflow modes via `--mode <full|quick|survey|gate>` or `TEAMWORK_WORKFLOW_MODE`.
 """
@@ -22,15 +22,17 @@ import sys
 WATCHDOG_WINDOW_MINUTES = 30
 WATCHDOG_PULSE_SECONDS = 600
 
-MODEL_TIERS = {
-    "survey": "flash",
-    "test_writer": "inherit",
-    "worker": "inherit",
-    "propose": "flash",
-    "reviewer": "pro",
-    "challenger": "inherit",
-    "forensic_auditor": "pro",
-    "victory_auditor": "pro",
+VALID_AGENT_MODES = {"normal", "fast", "lite", "ultra", "fusion"}
+
+AGENT_MODES = {
+    "survey": "lite",
+    "test_writer": "normal",
+    "worker": "normal",
+    "propose": "fast",
+    "reviewer": "ultra",
+    "challenger": "normal",
+    "forensic_auditor": "ultra",
+    "victory_auditor": "ultra",
 }
 
 WORKFLOW_MODES = {
@@ -276,7 +278,7 @@ async def run_survey_explorer(idx: int, focus: str, agent_fn=None):
         phase="survey",
         schema=SURVEY_SCHEMA,
         label=f"explorer-survey-{idx}",
-        model=MODEL_TIERS["survey"],
+        mode=AGENT_MODES["survey"],
     )
 
 
@@ -304,7 +306,7 @@ async def run_test_writer(agent_fn=None):
         phase="dual_track",
         schema=WORKER_HANDOFF_SCHEMA,
         label="test-writer-1",
-        model=MODEL_TIERS["test_writer"],
+        mode=AGENT_MODES["test_writer"],
     )
 
 
@@ -320,7 +322,7 @@ async def run_milestone_worker(milestone, agent_fn=None):
         phase="dual_track",
         schema=WORKER_HANDOFF_SCHEMA,
         label=f"worker-{m_id}",
-        model=MODEL_TIERS["worker"],
+        mode=AGENT_MODES["worker"],
     )
 
 
@@ -333,7 +335,7 @@ async def run_gate(iteration: int, include_challenger: bool = True, agent_fn=Non
         phase="gate_verification",
         schema=GATE_VERDICT_SCHEMA,
         label=f"reviewer-iter-{iteration}",
-        model=MODEL_TIERS["reviewer"],
+        mode=AGENT_MODES["reviewer"],
     )
     auditor_call = lambda: ag(
         f"You are Teamwork Forensic Integrity Auditor `auditor_{iteration}` (Binary Veto: `CLEAN` vs `INTEGRITY_VIOLATION`).\n"
@@ -342,7 +344,7 @@ async def run_gate(iteration: int, include_challenger: bool = True, agent_fn=Non
         phase="gate_verification",
         schema=GATE_VERDICT_SCHEMA,
         label=f"forensic-auditor-iter-{iteration}",
-        model=MODEL_TIERS["forensic_auditor"],
+        mode=AGENT_MODES["forensic_auditor"],
     )
     if not include_challenger:
         verdicts = await par([reviewer_call, auditor_call])
@@ -354,7 +356,7 @@ async def run_gate(iteration: int, include_challenger: bool = True, agent_fn=Non
             phase="gate_verification",
             schema=GATE_VERDICT_SCHEMA,
             label=f"challenger-iter-{iteration}",
-            model=MODEL_TIERS["challenger"],
+            mode=AGENT_MODES["challenger"],
         )
         verdicts = await par([reviewer_call, challenger_call, auditor_call])
 
@@ -380,7 +382,7 @@ async def propose_probe_compose(iteration: int, defects: list, k: int = 2, agent
             phase="remediation",
             schema=PROBE_CANDIDATE_SCHEMA,
             label=f"harness2-probe-{iteration}-{idx}",
-            model=MODEL_TIERS["propose"],
+            mode=AGENT_MODES["propose"],
         ))
         for c_idx in range(1, k + 1)
     ]
@@ -499,7 +501,7 @@ async def execute_full_workflow(agent_fn=None, parallel_fn=None):
         phase="victory_audit",
         schema=GATE_VERDICT_SCHEMA,
         label="victory-auditor",
-        model=MODEL_TIERS["victory_auditor"],
+        mode=AGENT_MODES["victory_auditor"],
     )
     _emit_log(f"Victory Audit Verdict: {victory.get('verdict')}")
     return {"status": "COMPLETED", "victory": victory}
@@ -526,6 +528,9 @@ async def main():
 
 if __name__ == "__main__":
     if "--check" in sys.argv:
+        invalid_modes = {k: v for k, v in AGENT_MODES.items() if v not in VALID_AGENT_MODES}
+        if invalid_modes:
+            raise SystemExit(f"Invalid Devin Cloud agent modes: {invalid_modes}")
         has_globals = "register_workflow" in globals()
         print(json.dumps({
             "workflow_file": os.path.abspath(__file__),
@@ -535,7 +540,7 @@ if __name__ == "__main__":
             "watchdog_pulse_seconds": WATCHDOG_PULSE_SECONDS,
             "runner_injected_globals": has_globals,
             "supports_propose_probe_compose": True,
-            "model_tiers": MODEL_TIERS,
+            "agent_modes": AGENT_MODES,
         }))
         sys.exit(0)
     asyncio.run(main())

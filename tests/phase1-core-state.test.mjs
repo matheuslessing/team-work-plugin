@@ -7,7 +7,8 @@ import { execFileSync } from 'node:child_process';
 import {
   extractSections,
   parseFrontmatter,
-  serializeFrontmatter
+  serializeFrontmatter,
+  sha256Text
 } from '../packages/core/frontmatter.mjs';
 import { validateHandoff, validateMemoryDoc } from '../packages/core/validator.mjs';
 import {
@@ -52,6 +53,10 @@ test('frontmatter parser & section extractor round-trip cleanly with line ranges
   assert.equal(sections[1].id, 'overview');
   assert.equal(sections[2].id, 'webhooks');
   assert.ok(sections[1].lines[0] < sections[2].lines[0]);
+
+  const quotedFm = parseFrontmatter(serializeFrontmatter({ summary: 'Avoid "global state": drift' }, 'Body\n'));
+  assert.equal(quotedFm.data.summary, 'Avoid "global state": drift');
+  assert.equal(sha256Text('a\r\nb\r\n'), sha256Text('a\nb\n'));
 });
 
 test('validator validates handoff 5 components and memory docs against disk refs', () => {

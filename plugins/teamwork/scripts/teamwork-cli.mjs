@@ -457,51 +457,56 @@ function cmdStatus() {
   }
 }
 
-switch (command) {
-  case 'detect-env':
-    cmdDetectEnv();
-    break;
-  case 'init':
-    cmdInit();
-    break;
-  case 'watchdog':
-    cmdWatchdog();
-    break;
-  case 'check-heartbeat':
-    cmdCheckHeartbeat();
-    break;
-  case 'succeed-orchestrator':
-    cmdSucceedOrchestrator();
-    break;
-  case 'spawn':
-    cmdSpawn();
-    break;
-  case 'validate-handoff':
-    cmdValidateHandoff();
-    break;
-  case 'scan-integrity':
-    cmdScanIntegrity();
-    break;
-  case 'check-gate':
-    cmdCheckGate();
-    break;
-  case 'state':
-    cmdState();
-    break;
-  case 'board':
-    cmdBoard();
-    break;
-  case 'stall-check':
-    console.log(JSON.stringify(detectStalls(workdir, { staleMinutes: Number(getFlag('--stale-min', '10')) }), null, 2));
-    break;
-  case 'view':
-    console.log(JSON.stringify(buildAndWriteView(workdir).view, null, 2));
-    break;
-  case 'worktree':
-    cmdWorktree();
-    break;
-  case 'status':
-  default:
-    cmdStatus();
-    break;
+try {
+  switch (command) {
+    case 'detect-env':
+      cmdDetectEnv();
+      break;
+    case 'init':
+      cmdInit();
+      break;
+    case 'watchdog':
+      cmdWatchdog();
+      break;
+    case 'check-heartbeat':
+      cmdCheckHeartbeat();
+      break;
+    case 'succeed-orchestrator':
+      cmdSucceedOrchestrator();
+      break;
+    case 'spawn':
+      cmdSpawn();
+      break;
+    case 'validate-handoff':
+      cmdValidateHandoff();
+      break;
+    case 'scan-integrity':
+      cmdScanIntegrity();
+      break;
+    case 'check-gate':
+      cmdCheckGate();
+      break;
+    case 'state':
+      cmdState();
+      break;
+    case 'board':
+      cmdBoard();
+      break;
+    case 'stall-check':
+      console.log(JSON.stringify(detectStalls(workdir, { staleMinutes: Number(getFlag('--stale-min', '10')) }), null, 2));
+      break;
+    case 'view':
+      console.log(JSON.stringify(buildAndWriteView(workdir).view, null, 2));
+      break;
+    case 'worktree':
+      cmdWorktree();
+      break;
+    case 'status':
+    default:
+      cmdStatus();
+      break;
+  }
+} catch (err) {
+  console.error(`FAIL: ${err.message}`);
+  process.exit(2);
 }

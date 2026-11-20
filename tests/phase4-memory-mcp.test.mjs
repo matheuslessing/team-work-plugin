@@ -250,6 +250,26 @@ test('HASP Barreira 2 & 3 block direct edits to memory.rc.json and invalid .memo
     assert.equal(rcEdit.status, 2);
     assert.match(rcEdit.stdout, /pf-rcjson-readonly/);
 
+    // 1b. Cloud exec write attempts to memory.rc.json -> BLOCK (exitCode 2), read-only & forge-cli allowed
+    for (const badCmd of [
+      "echo '{}' > .memory/memory.rc.json",
+      `node -e "fs.writeFileSync('.memory/memory.rc.json', '{}')"`
+    ]) {
+      const execBlock = spawnSync('node', [FORGE_HOOKS, 'PreToolUse', '--workdir', tmpProject], {
+        input: JSON.stringify({ tool_name: 'exec', tool_input: { command: badCmd } }),
+        encoding: 'utf8'
+      });
+      assert.equal(execBlock.status, 2, `Expected BLOCK for: ${badCmd}`);
+      assert.match(execBlock.stderr, /pf-rcjson-readonly/);
+    }
+    for (const okCmd of ['cat .memory/memory.rc.json', 'node forge-cli.mjs memory rebuild']) {
+      const execAllow = spawnSync('node', [FORGE_HOOKS, 'PreToolUse', '--workdir', tmpProject], {
+        input: JSON.stringify({ tool_name: 'exec', tool_input: { command: okCmd } }),
+        encoding: 'utf8'
+      });
+      assert.equal(execAllow.status, 0, `Expected ALLOW for: ${okCmd}`);
+    }
+
     // 2. Direct write of invalid .memory/architecture/bad.md -> BLOCK (exitCode 2)
     const badMemWrite = spawnSync('node', [FORGE_HOOKS, 'PreToolUse', '--workdir', tmpProject], {
       input: JSON.stringify({

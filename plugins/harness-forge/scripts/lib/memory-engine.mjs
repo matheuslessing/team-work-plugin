@@ -7,7 +7,7 @@ import {
   normalizePosix,
   parseFrontmatter,
   serializeFrontmatter,
-  sha256Hex,
+  sha256Text,
   slugify
 } from '../core/frontmatter.mjs';
 import { validateMemoryDoc } from '../core/validator.mjs';
@@ -85,7 +85,7 @@ export function computeDocDrift(entryData, workspaceRoot) {
       continue;
     }
     const content = fs.readFileSync(target, 'utf8');
-    const currentPrefix = sha256Hex(content).slice(0, 8);
+    const currentPrefix = sha256Text(content).slice(0, 8);
     if (ref.sha256_prefix && ref.sha256_prefix !== currentPrefix) {
       reasons.push(`File changed since last verification: ${ref.path} (${ref.sha256_prefix} -> ${currentPrefix})`);
     }
@@ -247,7 +247,7 @@ export async function rebuildIndex(workspaceRoot) {
       summary: d.summary || '',
       tags: Array.isArray(d.tags) ? d.tags : [],
       token_estimate: tokenEst,
-      content_sha256: sha256Hex(raw),
+      content_sha256: sha256Text(raw),
       sections,
       source_refs: Array.isArray(d.source_refs) ? d.source_refs : [],
       last_verified_commit: d.last_verified_commit || null,
@@ -339,7 +339,7 @@ export async function upsertMemoryDoc(workspaceRoot, payload) {
     enrichedRefs.push({
       path: normalizePosix(ref.path),
       ...(Array.isArray(ref.symbols) && ref.symbols.length > 0 ? { symbols: ref.symbols } : {}),
-      sha256_prefix: sha256Hex(fileContent).slice(0, 8)
+      sha256_prefix: sha256Text(fileContent).slice(0, 8)
     });
   }
 

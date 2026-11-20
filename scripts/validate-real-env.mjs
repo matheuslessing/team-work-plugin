@@ -444,7 +444,23 @@ function scenario5RealHaspHooks(tmpRoot, plugins) {
   assert.equal(preAgy.status, 0);
   assert.equal(JSON.parse(preAgy.stdout).decision, 'deny');
 
-  // 3. PostToolUse on tautological temp test file
+  // 2b. Cloud exec PreToolUse guard (pf-rcjson-readonly) blocks shell write to memory.rc.json
+  const preCloudRcExec = runNode(
+    plugins.hfHooks,
+    ['PreToolUse', '--workdir', repo, '--adapter', 'devin'],
+    {
+      input: JSON.stringify({
+        tool_name: 'exec',
+        tool_input: { command: 'echo "{}" > .memory/memory.rc.json' }
+      }),
+      allowFail: true
+    }
+  );
+  assert.equal(preCloudRcExec.status, 2);
+  assert.equal(JSON.parse(preCloudRcExec.stdout).decision, 'block');
+  assert.match(preCloudRcExec.stderr, /pf-rcjson-readonly/);
+
+  // 3. PostToolUse on tautological temp test file (both write_file and Cloud exec)
   const badTestFile = path.join(repo, 'tests', 'bad.test.mjs');
   const tautLine = ['expe', 'ct(true).toBe(true);'].join('');
   fs.writeFileSync(badTestFile, `import assert from 'node:assert';\n${tautLine}\n`, 'utf8');
@@ -454,6 +470,15 @@ function scenario5RealHaspHooks(tmpRoot, plugins) {
     }).stdout
   );
   assert.match(postDevin.hookSpecificOutput.additionalContext, /pf-anti-cheat-test/);
+  const postDevinExec = JSON.parse(
+    runNode(plugins.twHooks, ['PostToolUse', '--workdir', repo, '--adapter', 'devin'], {
+      input: JSON.stringify({
+        tool_name: 'exec',
+        tool_input: { command: "cat <<'EOF' > tests/bad.test.mjs\n// written via exec\nEOF" }
+      })
+    }).stdout
+  );
+  assert.match(postDevinExec.hookSpecificOutput.additionalContext, /pf-anti-cheat-test/);
   const postAgy = JSON.parse(
     runNode(plugins.twHooks, ['PostToolUse', '--workdir', repo, '--adapter', 'antigravity'], {
       input: JSON.stringify({ toolCall: { name: 'write_file', args: { Path: 'tests/bad.test.mjs' } } })
@@ -532,10 +557,11 @@ async function scenario6FullTeamworkLifecycle(tmpRoot, plugins) {
   const wtFeature = path.join(repo, '.agents', 'teamwork', 'worker_1', 'worktree', 'src', 'feature.js');
   fs.writeFileSync(wtFeature, 'export function computeScore(x) {\n  return x * 2;\n}\n', 'utf8');
 
-  // Gate is PENDING -> worktree merge MUST fail
+  // Gate is PENDING -> worktree merge MUST fail cleanly without raw stack trace
   const mergeFail = runNode(plugins.twCli, ['worktree', 'merge', 'worker_1', '--workdir', repo], { allowFail: true });
   assert.notEqual(mergeFail.status, 0, 'worktree merge must refuse PENDING gate');
-  assert.match(mergeFail.stderr + mergeFail.stdout, /Refusing to merge/);
+  assert.match(mergeFail.stderr, /^FAIL:\s+Refusing to merge/);
+  assert.doesNotMatch(mergeFail.stderr, /\n\s+at\s+/);
 
   // Pass the gate -> worktree merge MUST succeed
   fs.writeFileSync(
@@ -563,7 +589,10 @@ async function scenario6FullTeamworkLifecycle(tmpRoot, plugins) {
   const promoted = JSON.parse(runNode(plugins.hfCli, ['memory', 'promote', '--workdir', repo]).stdout);
   assert.equal(promoted.promoted.length, 1);
   const rc = JSON.parse(fs.readFileSync(path.join(repo, '.memory', 'memory.rc.json'), 'utf8'));
-  assert.ok(rc.entries.some((e) => e.id === promoted.promoted[0] && e.kind === 'gotcha'));
+  const promotedEntry = rc.entries.find((e) => e.id === promoted.promoted[0] && e.kind === 'gotcha');
+  assert.ok(promotedEntry);
+  assert.equal(promotedEntry.summary.includes('\\"'), false, `Unexpected escaped quote in summary: ${promotedEntry.summary}`);
+  assert.equal(promotedEntry.summary.includes('"Direct global state mutation"'), true);
 
   return { contractSha: frozen.sha256.slice(0, 12), promoted: promoted.promoted };
 }
