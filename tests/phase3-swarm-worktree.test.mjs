@@ -108,12 +108,19 @@ test('Git Worktree lifecycle isolates parallel milestone edits and refuses merge
     // Merge blocked while GATE_STATUS.md is PENDING
     assert.throws(() => mergeWorktree(tmp, 'worker_m1', { requireGate: true }), /Gate is not CLEAN\/PASS/);
 
-    // Mark Gate PASS and merge both worktrees cleanly
+    // Mark Gate PASS, verify dirty main tree blocks merge, then revert and merge cleanly
     fs.writeFileSync(
       path.join(tmp, '.agents', 'teamwork', 'orchestrator_1', 'GATE_STATUS.md'),
       '# Gate\n\n## Gate — Iteration 1\n| r | g | **APPROVE** | h |\n| a | g | **CLEAN** | h |\n\nGate Result: **PASS**\n',
       'utf8'
     );
+    fs.writeFileSync(path.join(tmp, 'README.md'), '# Dirty main\n', 'utf8');
+    assert.throws(
+      () => mergeWorktree(tmp, 'worker_m1', { requireGate: true }),
+      /main worktree has uncommitted tracked changes/
+    );
+    execFileSync('git', ['checkout', '--', 'README.md'], { cwd: tmp, stdio: 'pipe' });
+
     mergeWorktree(tmp, 'worker_m1', { requireGate: true });
     mergeWorktree(tmp, 'worker_m2', { requireGate: true });
 

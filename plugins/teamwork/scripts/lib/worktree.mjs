@@ -87,6 +87,17 @@ export function mergeWorktree(workdir, agentId, { requireGate = true } = {}) {
   if (requireGate && !isGatePassing(root)) {
     throw new Error(`Refusing to merge ${branch}: Verification Gate is not CLEAN/PASS.`);
   }
+  const mainDirty = runGit(root, ['status', '--porcelain', '--untracked-files=no']);
+  if (mainDirty) {
+    const files = mainDirty
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .slice(0, 5)
+      .join(', ');
+    throw new Error(
+      `Refusing to merge ${branch}: main worktree has uncommitted tracked changes (${files}). Commit or stash them before merging.`
+    );
+  }
   if (fs.existsSync(wtDir)) {
     const dirty = runGit(wtDir, ['status', '--porcelain']);
     if (dirty) {
