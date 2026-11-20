@@ -1,0 +1,38 @@
+{
+  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "name": "team-craft",
+  "version": "2.0.0",
+  "description": "Interactive 9-step prompt crafting with Complexity Router (Solo / Quick / Full Dual-Track) producing ORIGINAL_REQUEST.md and delegating cleanly.",
+  "token_budget_tier": "medium",
+  "eligibility": {
+    "phases": ["INIT", "DONE", "MANUAL"],
+    "runtimes": ["DEVIN_CLI_LOCAL", "DEVIN_CLOUD", "ANTIGRAVITY"]
+  },
+  "P_preconditions": [
+    { "type": "user_intent_present", "description": "User provides initial idea or problem statement" }
+  ],
+  "O_operation": {
+    "authority_profile": "dispatch_only",
+    "allowed_write_globs": [".agents/teamwork/prompt_draft.md", ".agents/teamwork/ORIGINAL_REQUEST.md", ".agents/teamwork/**"],
+    "denied_shell_patterns": ["git\\s+push", "rm\\s+-rf"],
+    "program_functions": ["pf-write-boundary", "pf-loop-breaker"]
+  },
+  "A_artifacts": [
+    { "path": ".agents/teamwork/prompt_draft.md", "required": true },
+    { "path": ".agents/teamwork/ORIGINAL_REQUEST.md", "required": true }
+  ],
+  "V_validators": [
+    { "cmd": "node ${PLUGIN_ROOT}/scripts/teamwork-cli.mjs state show --workdir ." }
+  ],
+  "F_failure_modes": [
+    { "code": "AMBIGUOUS_CRITERIA", "action": "INJECT_CONTEXT", "route_to": "user_clarification" },
+    { "code": "MISSING_APPROVAL", "action": "BLOCK_DELEGATION", "route_to": "team-craft" }
+  ],
+  "ecosystem_edges": {
+    "depends_on": [],
+    "compatible_with": ["team-run", "team-quick"],
+    "redundant_with": [],
+    "alternative_to": [],
+    "lineage": "team-craft@1.0.0"
+  }
+}

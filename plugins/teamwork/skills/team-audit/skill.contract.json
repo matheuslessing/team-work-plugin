@@ -1,0 +1,35 @@
+{
+  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "name": "team-audit",
+  "version": "2.0.0",
+  "description": "Standalone Binary Forensic Integrity Audit (CLEAN vs INTEGRITY VIOLATION) catching tautological tests, mocks, skips, stubs, and facade runners.",
+  "token_budget_tier": "low",
+  "eligibility": {
+    "phases": ["DUAL_TRACK", "GATE", "REMEDIATION", "VICTORY_AUDIT", "MANUAL"],
+    "runtimes": ["DEVIN_CLI_LOCAL", "DEVIN_CLOUD", "ANTIGRAVITY"]
+  },
+  "P_preconditions": [],
+  "O_operation": {
+    "authority_profile": "audit_only",
+    "allowed_write_globs": [".agents/teamwork/auditor_*/**"],
+    "denied_shell_patterns": ["sed\\s+-i", "git\\s+(commit|push|reset|checkout)"],
+    "program_functions": ["pf-write-boundary", "pf-anti-cheat-test", "pf-facade-runner", "pf-handoff-completeness"]
+  },
+  "A_artifacts": [
+    { "path": ".agents/teamwork/auditor_1/audit_report.md", "required": true },
+    { "path": ".agents/teamwork/auditor_1/handoff.md", "required": true }
+  ],
+  "V_validators": [
+    { "cmd": "node ${PLUGIN_ROOT}/scripts/teamwork-cli.mjs scan-integrity --workdir . --strict --json" }
+  ],
+  "F_failure_modes": [
+    { "code": "INTEGRITY_VIOLATION", "action": "VETO_GATE", "route_to": "worker_remediation" }
+  ],
+  "ecosystem_edges": {
+    "depends_on": [],
+    "compatible_with": ["team-gate", "team-quick", "team-test-track"],
+    "redundant_with": [],
+    "alternative_to": [],
+    "lineage": "team-audit@1.0.0"
+  }
+}

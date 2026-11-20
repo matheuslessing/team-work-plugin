@@ -1,0 +1,36 @@
+{
+  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "name": "forge-migrate-docs",
+  "version": "1.0.0",
+  "description": "Ingest existing docs or map undocumented codebases into standardized PMSP .memory/ notes with verified source_refs and compiled memory.rc.json.",
+  "token_budget_tier": "medium",
+  "eligibility": {
+    "phases": ["INIT", "SURVEY", "DONE", "MANUAL"],
+    "runtimes": ["DEVIN_CLI_LOCAL", "DEVIN_CLOUD", "ANTIGRAVITY"]
+  },
+  "P_preconditions": [],
+  "O_operation": {
+    "authority_profile": "governance_writer",
+    "allowed_write_globs": [".memory/**/*.md"],
+    "denied_shell_patterns": [],
+    "program_functions": ["pf-rcjson-readonly", "pf-memory-guard"]
+  },
+  "A_artifacts": [
+    { "path": ".memory/memory.rc.json", "required": true },
+    { "path": ".memory/MEMORY.md", "required": true }
+  ],
+  "V_validators": [
+    { "cmd": "node ${PLUGIN_ROOT}/scripts/forge-cli.mjs validate --workdir . --strict" },
+    { "cmd": "node ${PLUGIN_ROOT}/scripts/forge-cli.mjs memory drift --workdir ." }
+  ],
+  "F_failure_modes": [
+    { "code": "BROKEN_SOURCE_REF", "action": "REJECT_DOC", "route_to": "forge:doc-standardizer" }
+  ],
+  "ecosystem_edges": {
+    "depends_on": ["forge-memory"],
+    "compatible_with": ["forge-drift", "forge-validate"],
+    "redundant_with": [],
+    "alternative_to": [],
+    "lineage": "forge-migrate-docs@1.0.0"
+  }
+}

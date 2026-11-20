@@ -1,0 +1,14 @@
+{
+  "name": "harness-forge",
+  "displayName": "Harness Forge (Skills, Memory & MCP)",
+  "version": "2.0.0",
+  "description": "SkillOps & PMSP Project Memory factory with embedded MCP server, HASP guardrails, doc/skill migrators, drift checks, and Skill-Use benchmark.",
+  "author": {
+    "name": "Matheus Lessing"
+  },
+  "suggestedPrompts": [
+    "Run /forge-migrate-docs to standardize existing docs into .memory/ and memory.rc.json",
+    "Run /forge-migrate-skill to upgrade an existing SKILL.md to SkillOps 5-tuple + HASP",
+    "Run /forge-drift to detect code changes that outpaced project memory"
+  ]
+}

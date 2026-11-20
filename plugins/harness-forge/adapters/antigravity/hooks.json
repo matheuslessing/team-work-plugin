@@ -1,0 +1,35 @@
+{
+  "harness-forge-guardrails": {
+    "PreToolUse": [
+      {
+        "matcher": "edit|write_file|edit_file",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./scripts/hooks-engine.mjs PreToolUse --adapter antigravity",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "edit|write_file|edit_file",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./scripts/hooks-engine.mjs PostToolUse --adapter antigravity",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "node ./scripts/hooks-engine.mjs Stop --adapter antigravity",
+        "timeout": 10
+      }
+    ]
+  }
+}

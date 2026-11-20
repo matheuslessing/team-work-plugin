@@ -1,0 +1,39 @@
+{
+  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "name": "team-test-track",
+  "version": "2.0.0",
+  "description": "Launch independent Test Writer to build 4-tier E2E tests bound to frozen contracts, dynamic runner, TEST_INFRA.md, and TEST_READY.md.",
+  "token_budget_tier": "medium",
+  "eligibility": {
+    "phases": ["CONTRACT_FROZEN", "DUAL_TRACK", "MANUAL"],
+    "runtimes": ["DEVIN_CLI_LOCAL", "DEVIN_CLOUD", "ANTIGRAVITY"]
+  },
+  "P_preconditions": [
+    { "type": "file_exists", "path": ".agents/teamwork/ORIGINAL_REQUEST.md" }
+  ],
+  "O_operation": {
+    "authority_profile": "test_writer",
+    "allowed_write_globs": ["TEST_INFRA.md", "TEST_READY.md", "tests/**", "run_tests.*", ".agents/teamwork/test_writer_*/**"],
+    "denied_shell_patterns": [],
+    "program_functions": ["pf-write-boundary", "pf-anti-cheat-test", "pf-facade-runner", "pf-handoff-completeness"]
+  },
+  "A_artifacts": [
+    { "path": "TEST_INFRA.md", "required": true },
+    { "path": "TEST_READY.md", "required": true },
+    { "path": ".agents/teamwork/test_writer_1/handoff.md", "required": true }
+  ],
+  "V_validators": [
+    { "cmd": "node ${PLUGIN_ROOT}/scripts/teamwork-cli.mjs scan-integrity --workdir . --tests-only --strict" }
+  ],
+  "F_failure_modes": [
+    { "code": "TAUTOLOGICAL_TEST", "action": "INJECT_CONTEXT", "route_to": "test-writer" },
+    { "code": "FACADE_RUNNER", "action": "INJECT_CONTEXT", "route_to": "test-writer" }
+  ],
+  "ecosystem_edges": {
+    "depends_on": ["team-contract-freeze"],
+    "compatible_with": ["team-run", "team-gate", "team-audit"],
+    "redundant_with": [],
+    "alternative_to": [],
+    "lineage": "team-test-track@1.0.0"
+  }
+}

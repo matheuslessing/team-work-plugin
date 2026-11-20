@@ -1,0 +1,36 @@
+{
+  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "name": "team-gate",
+  "version": "2.0.0",
+  "description": "Execute parallel 3-agent Verification Gate (Reviewer + Challenger + Forensic Auditor) updating GATE_STATUS.md.",
+  "token_budget_tier": "medium",
+  "eligibility": {
+    "phases": ["DUAL_TRACK", "GATE", "REMEDIATION", "MANUAL"],
+    "runtimes": ["DEVIN_CLI_LOCAL", "DEVIN_CLOUD", "ANTIGRAVITY"]
+  },
+  "P_preconditions": [
+    { "type": "file_exists", "path": ".agents/teamwork/ORIGINAL_REQUEST.md" }
+  ],
+  "O_operation": {
+    "authority_profile": "read_only",
+    "allowed_write_globs": [".agents/teamwork/**"],
+    "denied_shell_patterns": ["sed\\s+-i", "git\\s+(commit|push|reset|checkout)"],
+    "program_functions": ["pf-write-boundary", "pf-handoff-completeness"]
+  },
+  "A_artifacts": [
+    { "path": ".agents/teamwork/<active_orchestrator>/GATE_STATUS.md", "required": true }
+  ],
+  "V_validators": [
+    { "cmd": "node ${PLUGIN_ROOT}/scripts/teamwork-cli.mjs check-gate --workdir ." }
+  ],
+  "F_failure_modes": [
+    { "code": "GATE_REJECTED", "action": "TRANSITION_REMEDIATION", "route_to": "worker_remediation" }
+  ],
+  "ecosystem_edges": {
+    "depends_on": ["team-test-track"],
+    "compatible_with": ["team-audit", "team-run", "team-quick"],
+    "redundant_with": [],
+    "alternative_to": [],
+    "lineage": "team-gate@1.0.0"
+  }
+}

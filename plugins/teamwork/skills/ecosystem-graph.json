@@ -1,0 +1,470 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-11-19T23:11:33.667Z",
+  "skills_dir": "C:/Users/Matheus/Documents/team-plugin/plugins/teamwork/skills",
+  "nodes": [
+    {
+      "id": "team-audit",
+      "version": "2.0.0",
+      "description": "Standalone Binary Forensic Integrity Audit (CLEAN vs INTEGRITY VIOLATION) catching tautological tests, mocks, skips, stubs, and facade runners.",
+      "token_budget_tier": "low",
+      "authority_profile": "audit_only",
+      "program_functions": [
+        "pf-write-boundary",
+        "pf-anti-cheat-test",
+        "pf-facade-runner",
+        "pf-handoff-completeness"
+      ],
+      "line_count": 29,
+      "token_estimate": 310,
+      "content_sha256": "f9f4db70a96ee9151b8d9f302da0b62a1182634dc35dc19f983a25a629207baf",
+      "valid": true
+    },
+    {
+      "id": "team-board",
+      "version": "1.0.0",
+      "description": "Append-only JSONL message board with channels, @mentions, #seq zero-copy handoff refs, and automated stall detection.",
+      "token_budget_tier": "low",
+      "authority_profile": "dispatch_only",
+      "program_functions": [
+        "pf-loop-breaker"
+      ],
+      "line_count": 30,
+      "token_estimate": 335,
+      "content_sha256": "b581ee3df02c63377e276e664d219abb5c51b0dd42da911404cd29ff7e18e8bd",
+      "valid": true
+    },
+    {
+      "id": "team-cloud-workflow",
+      "version": "2.0.0",
+      "description": "Execute deterministic Python workflows (workflow.py) with 30m VM watch_dog, dynamic orchestrator resolution, and Harness2 Propose-Probe-Compose.",
+      "token_budget_tier": "medium",
+      "authority_profile": "full_orchestrator",
+      "program_functions": [
+        "pf-handoff-completeness",
+        "pf-loop-breaker"
+      ],
+      "line_count": 32,
+      "token_estimate": 364,
+      "content_sha256": "2a8c78738c3a2ab08cfb4312c0419e69bb3cb8802b82993fd670c41c56165afb",
+      "valid": true
+    },
+    {
+      "id": "team-contract-freeze",
+      "version": "1.0.0",
+      "description": "Validate and SHA-256 hash PROJECT.md Interface Contracts into state.json before parallel Track A & Track B execution.",
+      "token_budget_tier": "low",
+      "authority_profile": "dispatch_only",
+      "program_functions": [
+        "pf-write-boundary"
+      ],
+      "line_count": 29,
+      "token_estimate": 277,
+      "content_sha256": "78b6b029ad05610c2e5cc776fc3e7567eaa286972baabebdc16e78bef8f8e598",
+      "valid": true
+    },
+    {
+      "id": "team-craft",
+      "version": "2.0.0",
+      "description": "Interactive 9-step prompt crafting with Complexity Router (Solo / Quick / Full Dual-Track) producing ORIGINAL_REQUEST.md and delegating cleanly.",
+      "token_budget_tier": "medium",
+      "authority_profile": "dispatch_only",
+      "program_functions": [
+        "pf-write-boundary",
+        "pf-loop-breaker"
+      ],
+      "line_count": 43,
+      "token_estimate": 667,
+      "content_sha256": "71d2fb9cf59bfd862f0c252d9bb1a42b45722fedbf9508f394dcabdcea4979c2",
+      "valid": true
+    },
+    {
+      "id": "team-gate",
+      "version": "2.0.0",
+      "description": "Execute parallel 3-agent Verification Gate (Reviewer + Challenger + Forensic Auditor) updating GATE_STATUS.md.",
+      "token_budget_tier": "medium",
+      "authority_profile": "read_only",
+      "program_functions": [
+        "pf-write-boundary",
+        "pf-handoff-completeness"
+      ],
+      "line_count": 31,
+      "token_estimate": 347,
+      "content_sha256": "804c3f56ff0fe18b9ccdcd50ab7e271444f440d92fbe3425d6779b1a4169fdc3",
+      "valid": true
+    },
+    {
+      "id": "team-quick",
+      "version": "2.0.0",
+      "description": "Compact pipeline (1 scoped Worker + parallel Reviewer & Forensic Auditor loop) for self-contained bug fixes or features.",
+      "token_budget_tier": "low",
+      "authority_profile": "dispatch_only",
+      "program_functions": [
+        "pf-write-boundary",
+        "pf-anti-cheat-test",
+        "pf-handoff-completeness"
+      ],
+      "line_count": 31,
+      "token_estimate": 356,
+      "content_sha256": "2e7b7634c4475dec14dc05fb732f58ef6df8845e884577896efe4dc725d127ff",
+      "valid": true
+    },
+    {
+      "id": "team-run",
+      "version": "2.0.0",
+      "description": "Full Dual-Track LTS pipeline with Contract Freeze, Worktrees, Verification Gate, Propose-Probe-Compose remediation, and Victory Audit.",
+      "token_budget_tier": "high",
+      "authority_profile": "dispatch_only",
+      "program_functions": [
+        "pf-write-boundary",
+        "pf-handoff-completeness",
+        "pf-loop-breaker"
+      ],
+      "line_count": 41,
+      "token_estimate": 620,
+      "content_sha256": "2bef317ca612a44773694aeb2e847e27522ab96f3edfa18797ebeba525517999",
+      "valid": true
+    },
+    {
+      "id": "team-status",
+      "version": "2.0.0",
+      "description": "Render live outcome Threads, Attention queue, Skill-BOM summary, and Gate status from view.json and state.json.",
+      "token_budget_tier": "low",
+      "authority_profile": "read_only",
+      "program_functions": [],
+      "line_count": 28,
+      "token_estimate": 247,
+      "content_sha256": "7136a04a0e480300e94d1e681cd4692e3ec263da861677000315d65c8250aced",
+      "valid": true
+    },
+    {
+      "id": "team-survey",
+      "version": "2.0.0",
+      "description": "Consult project memory for architecture & drift, dispatch parallel read-only Explorers, and synthesize PROJECT.md.",
+      "token_budget_tier": "medium",
+      "authority_profile": "read_only",
+      "program_functions": [
+        "pf-write-boundary",
+        "pf-handoff-completeness"
+      ],
+      "line_count": 32,
+      "token_estimate": 446,
+      "content_sha256": "f1064e14dbad4a76a997ba218cc9a168e80d4ef41cf43b96b789297e4e8ea65f",
+      "valid": true
+    },
+    {
+      "id": "team-test-track",
+      "version": "2.0.0",
+      "description": "Launch independent Test Writer to build 4-tier E2E tests bound to frozen contracts, dynamic runner, TEST_INFRA.md, and TEST_READY.md.",
+      "token_budget_tier": "medium",
+      "authority_profile": "test_writer",
+      "program_functions": [
+        "pf-write-boundary",
+        "pf-anti-cheat-test",
+        "pf-facade-runner",
+        "pf-handoff-completeness"
+      ],
+      "line_count": 26,
+      "token_estimate": 317,
+      "content_sha256": "5d03b4c590f72997cb92c6999a78b04d42c12a9ab5ab2818b458856ecb186636",
+      "valid": true
+    },
+    {
+      "id": "team-worktree",
+      "version": "1.0.0",
+      "description": "Provision, inspect, merge (after CLEAN Gate), and prune isolated Git Worktrees for concurrent milestone workers.",
+      "token_budget_tier": "low",
+      "authority_profile": "dispatch_only",
+      "program_functions": [
+        "pf-write-boundary"
+      ],
+      "line_count": 28,
+      "token_estimate": 299,
+      "content_sha256": "d20cf4f67050472a894ae2a385dea3e0444914834dd1bd4093e19445efe4d927",
+      "valid": true
+    }
+  ],
+  "edges": [
+    {
+      "from": "team-audit",
+      "to": "team-gate",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-audit",
+      "to": "team-quick",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-audit",
+      "to": "team-test-track",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-audit",
+      "to": "team-audit@1.0.0",
+      "type": "lineage"
+    },
+    {
+      "from": "team-board",
+      "to": "team-run",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-board",
+      "to": "team-status",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-board",
+      "to": "team-worktree",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-board",
+      "to": "team-board@1.0.0",
+      "type": "lineage"
+    },
+    {
+      "from": "team-cloud-workflow",
+      "to": "team-run",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-cloud-workflow",
+      "to": "team-quick",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-cloud-workflow",
+      "to": "team-survey",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-cloud-workflow",
+      "to": "team-gate",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-cloud-workflow",
+      "to": "team-cloud-workflow@1.0.0",
+      "type": "lineage"
+    },
+    {
+      "from": "team-contract-freeze",
+      "to": "team-survey",
+      "type": "depends_on"
+    },
+    {
+      "from": "team-contract-freeze",
+      "to": "team-test-track",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-contract-freeze",
+      "to": "team-worktree",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-contract-freeze",
+      "to": "team-run",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-contract-freeze",
+      "to": "team-contract-freeze@1.0.0",
+      "type": "lineage"
+    },
+    {
+      "from": "team-craft",
+      "to": "team-run",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-craft",
+      "to": "team-quick",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-craft",
+      "to": "team-craft@1.0.0",
+      "type": "lineage"
+    },
+    {
+      "from": "team-gate",
+      "to": "team-test-track",
+      "type": "depends_on"
+    },
+    {
+      "from": "team-gate",
+      "to": "team-audit",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-gate",
+      "to": "team-run",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-gate",
+      "to": "team-quick",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-gate",
+      "to": "team-gate@1.0.0",
+      "type": "lineage"
+    },
+    {
+      "from": "team-quick",
+      "to": "team-gate",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-quick",
+      "to": "team-audit",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-quick",
+      "to": "team-run",
+      "type": "alternative_to"
+    },
+    {
+      "from": "team-quick",
+      "to": "team-quick@1.0.0",
+      "type": "lineage"
+    },
+    {
+      "from": "team-run",
+      "to": "team-craft",
+      "type": "depends_on"
+    },
+    {
+      "from": "team-run",
+      "to": "team-survey",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-run",
+      "to": "team-contract-freeze",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-run",
+      "to": "team-test-track",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-run",
+      "to": "team-worktree",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-run",
+      "to": "team-board",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-run",
+      "to": "team-gate",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-run",
+      "to": "team-status",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-run",
+      "to": "team-quick",
+      "type": "alternative_to"
+    },
+    {
+      "from": "team-run",
+      "to": "team-run@1.0.0",
+      "type": "lineage"
+    },
+    {
+      "from": "team-status",
+      "to": "team-run",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-status",
+      "to": "team-board",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-status",
+      "to": "team-gate",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-status",
+      "to": "team-status@1.0.0",
+      "type": "lineage"
+    },
+    {
+      "from": "team-survey",
+      "to": "team-contract-freeze",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-survey",
+      "to": "team-run",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-survey",
+      "to": "team-survey@1.0.0",
+      "type": "lineage"
+    },
+    {
+      "from": "team-test-track",
+      "to": "team-contract-freeze",
+      "type": "depends_on"
+    },
+    {
+      "from": "team-test-track",
+      "to": "team-run",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-test-track",
+      "to": "team-gate",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-test-track",
+      "to": "team-audit",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-test-track",
+      "to": "team-test-track@1.0.0",
+      "type": "lineage"
+    },
+    {
+      "from": "team-worktree",
+      "to": "team-contract-freeze",
+      "type": "depends_on"
+    },
+    {
+      "from": "team-worktree",
+      "to": "team-run",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-worktree",
+      "to": "team-gate",
+      "type": "compatible_with"
+    },
+    {
+      "from": "team-worktree",
+      "to": "team-worktree@1.0.0",
+      "type": "lineage"
+    }
+  ],
+  "candidate_redundancies": []
+}

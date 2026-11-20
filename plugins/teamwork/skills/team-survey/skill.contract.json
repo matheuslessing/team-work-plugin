@@ -1,0 +1,36 @@
+{
+  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "name": "team-survey",
+  "version": "2.0.0",
+  "description": "Consult project memory for architecture & drift, dispatch parallel read-only Explorers, and synthesize PROJECT.md.",
+  "token_budget_tier": "medium",
+  "eligibility": {
+    "phases": ["INIT", "SURVEY", "MANUAL"],
+    "runtimes": ["DEVIN_CLI_LOCAL", "DEVIN_CLOUD", "ANTIGRAVITY"]
+  },
+  "P_preconditions": [
+    { "type": "file_exists", "path": ".agents/teamwork/ORIGINAL_REQUEST.md" }
+  ],
+  "O_operation": {
+    "authority_profile": "read_only",
+    "allowed_write_globs": [".agents/teamwork/**"],
+    "denied_shell_patterns": ["sed\\s+-i", "git\\s+(commit|push|reset|checkout)"],
+    "program_functions": ["pf-write-boundary", "pf-handoff-completeness"]
+  },
+  "A_artifacts": [
+    { "path": ".agents/teamwork/<active_orchestrator>/PROJECT.md", "required": true }
+  ],
+  "V_validators": [
+    { "cmd": "node ${PLUGIN_ROOT}/scripts/teamwork-cli.mjs state show --workdir ." }
+  ],
+  "F_failure_modes": [
+    { "code": "OVERLAPPING_OWNERSHIP", "action": "REJECT_PLAN", "route_to": "orchestrator" }
+  ],
+  "ecosystem_edges": {
+    "depends_on": [],
+    "compatible_with": ["team-contract-freeze", "team-run"],
+    "redundant_with": [],
+    "alternative_to": [],
+    "lineage": "team-survey@1.0.0"
+  }
+}

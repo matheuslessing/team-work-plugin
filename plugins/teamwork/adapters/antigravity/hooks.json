@@ -1,0 +1,42 @@
+{
+  "teamwork-guardrails": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "node ./scripts/hooks-engine.mjs SessionStart --adapter antigravity",
+        "timeout": 10
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "edit|write_file|edit_file|run_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./scripts/hooks-engine.mjs PreToolUse --adapter antigravity",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "edit|write_file|edit_file|run_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./scripts/hooks-engine.mjs PostToolUse --adapter antigravity",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "node ./scripts/hooks-engine.mjs Stop --adapter antigravity",
+        "timeout": 10
+      }
+    ]
+  }
+}

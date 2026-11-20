@@ -1,0 +1,38 @@
+{
+  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "name": "team-board",
+  "version": "1.0.0",
+  "description": "Append-only JSONL message board with channels, @mentions, #seq zero-copy handoff refs, and automated stall detection.",
+  "token_budget_tier": "low",
+  "eligibility": {
+    "phases": ["INIT", "SURVEY", "CONTRACT_FROZEN", "DUAL_TRACK", "GATE", "REMEDIATION", "VICTORY_AUDIT", "MANUAL"],
+    "runtimes": ["DEVIN_CLI_LOCAL", "DEVIN_CLOUD", "ANTIGRAVITY"]
+  },
+  "P_preconditions": [
+    { "type": "file_exists", "path": ".agents/teamwork/state.json" }
+  ],
+  "O_operation": {
+    "authority_profile": "dispatch_only",
+    "allowed_write_globs": [".agents/teamwork/board.jsonl", ".agents/teamwork/board-meta.json", ".agents/teamwork/view.json"],
+    "denied_shell_patterns": [],
+    "program_functions": ["pf-loop-breaker"]
+  },
+  "A_artifacts": [
+    { "path": ".agents/teamwork/board.jsonl", "required": false },
+    { "path": ".agents/teamwork/view.json", "required": true }
+  ],
+  "V_validators": [
+    { "cmd": "node ${PLUGIN_ROOT}/scripts/teamwork-cli.mjs board status --workdir ." },
+    { "cmd": "node ${PLUGIN_ROOT}/scripts/teamwork-cli.mjs stall-check --workdir ." }
+  ],
+  "F_failure_modes": [
+    { "code": "SWARM_STALL", "action": "PING_TARGET", "route_to": "orchestrator" }
+  ],
+  "ecosystem_edges": {
+    "depends_on": [],
+    "compatible_with": ["team-run", "team-status", "team-worktree"],
+    "redundant_with": [],
+    "alternative_to": [],
+    "lineage": "team-board@1.0.0"
+  }
+}

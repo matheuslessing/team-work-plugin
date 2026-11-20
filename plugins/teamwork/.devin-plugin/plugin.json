@@ -1,0 +1,23 @@
+{
+  "name": "teamwork",
+  "version": "2.0.0",
+  "description": "Autonomous multi-agent engineering harness for Devin CLI/Cloud & Antigravity: LTS state machine, HASP Program Functions, Dual-Track 4-tier E2E testing, Swarm Board #seq, Git Worktree isolation, Adversarial Challenger, Binary Forensic Auditor, and Harness² Propose-Probe-Compose.",
+  "author": {
+    "name": "Matheus Lessing"
+  },
+  "homepage": "https://github.com/matheuslessing/team-work-plugin",
+  "repository": "https://github.com/matheuslessing/team-work-plugin.git",
+  "license": "MIT",
+  "keywords": [
+    "teamwork",
+    "multi-agent",
+    "agent-harness",
+    "hasp",
+    "skillops",
+    "forensic-audit",
+    "e2e-testing",
+    "worktrees",
+    "quality-gates"
+  ],
+  "skills": "skills"
+}

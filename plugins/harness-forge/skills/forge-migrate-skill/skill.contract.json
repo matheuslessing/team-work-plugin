@@ -1,0 +1,35 @@
+{
+  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "name": "forge-migrate-skill",
+  "version": "1.0.0",
+  "description": "Analyze and upgrade legacy SKILL.md, playbooks, or prompts into standardized SkillOps 5-tuple + HASP + Progressive Disclosure skills.",
+  "token_budget_tier": "medium",
+  "eligibility": {
+    "phases": ["INIT", "SURVEY", "DONE", "MANUAL"],
+    "runtimes": ["DEVIN_CLI_LOCAL", "DEVIN_CLOUD", "ANTIGRAVITY"]
+  },
+  "P_preconditions": [],
+  "O_operation": {
+    "authority_profile": "governance_writer",
+    "allowed_write_globs": [".agents/skills/**", "skills/**", "**/skills/**"],
+    "denied_shell_patterns": ["rm\\s+-rf"],
+    "program_functions": ["pf-skill-contract-guard"]
+  },
+  "A_artifacts": [
+    { "path": "<target>/<name>/SKILL.md", "required": true },
+    { "path": "<target>/<name>/skill.contract.json", "required": true }
+  ],
+  "V_validators": [
+    { "cmd": "node ${PLUGIN_ROOT}/scripts/forge-cli.mjs skillops audit --skills-dir .agents/skills --strict" }
+  ],
+  "F_failure_modes": [
+    { "code": "BROKEN_VALIDATOR_CMD", "action": "REPAIR_CONTRACT", "route_to": "forge:skill-migrator" }
+  ],
+  "ecosystem_edges": {
+    "depends_on": [],
+    "compatible_with": ["forge-skillops", "forge-validate", "forge-evolve"],
+    "redundant_with": [],
+    "alternative_to": ["forge-skill"],
+    "lineage": "forge-migrate-skill@1.0.0"
+  }
+}

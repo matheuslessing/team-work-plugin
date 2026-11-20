@@ -1,0 +1,14 @@
+{
+  "name": "teamwork",
+  "displayName": "Teamwork Harness v2",
+  "version": "2.0.0",
+  "description": "Autonomous Dual-Track multi-agent engineering harness with HASP guardrails, SkillOps contracts, Swarm Board, Worktree isolation, and Binary Forensic Integrity Audit.",
+  "author": {
+    "name": "Matheus Lessing"
+  },
+  "suggestedPrompts": [
+    "Run /team-craft to design requirements and launch the Dual-Track pipeline",
+    "Run /team-gate to execute Adversarial Reviewer, Challenger, and Forensic Auditor",
+    "Run /team-status to view the live Threads & Attention dashboard"
+  ]
+}

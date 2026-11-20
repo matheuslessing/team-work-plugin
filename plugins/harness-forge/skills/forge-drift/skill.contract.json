@@ -1,0 +1,36 @@
+{
+  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "name": "forge-drift",
+  "version": "1.0.0",
+  "description": "Compare source_refs SHA-256 hashes and symbol references against current files on disk to flag and cure stale project memory.",
+  "token_budget_tier": "low",
+  "eligibility": {
+    "phases": ["INIT", "SURVEY", "DONE", "MANUAL"],
+    "runtimes": ["DEVIN_CLI_LOCAL", "DEVIN_CLOUD", "ANTIGRAVITY"]
+  },
+  "P_preconditions": [
+    { "type": "file_exists", "path": ".memory/memory.rc.json" }
+  ],
+  "O_operation": {
+    "authority_profile": "read_only",
+    "allowed_write_globs": [".memory/**/*.md"],
+    "denied_shell_patterns": ["git\\s+(commit|push|reset)"],
+    "program_functions": ["pf-memory-guard"]
+  },
+  "A_artifacts": [
+    { "path": ".memory/memory.rc.json", "required": true }
+  ],
+  "V_validators": [
+    { "cmd": "node ${PLUGIN_ROOT}/scripts/forge-cli.mjs memory drift --workdir ." }
+  ],
+  "F_failure_modes": [
+    { "code": "STALE_MEMORY_DETECTED", "action": "INJECT_CONTEXT", "route_to": "forge:memory-curator" }
+  ],
+  "ecosystem_edges": {
+    "depends_on": ["forge-memory"],
+    "compatible_with": ["forge-migrate-docs", "forge-validate"],
+    "redundant_with": [],
+    "alternative_to": [],
+    "lineage": "forge-drift@1.0.0"
+  }
+}

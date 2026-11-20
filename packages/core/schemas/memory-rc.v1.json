@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://teamwork-suite.dev/schemas/memory-rc.v1.json",
+  "title": "PMSP Compiled Project Memory Index (memory.rc.json)",
+  "type": "object",
+  "required": ["schema_version", "generated_at", "memory_root", "git_head", "entries"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schema_version": { "type": "string", "const": "1.0.0" },
+    "generated_at": { "type": "string" },
+    "memory_root": { "type": "string" },
+    "git_head": { "type": "string" },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "stale",
+          "drift_reasons",
+          "path",
+          "summary",
+          "tags",
+          "token_estimate",
+          "sections",
+          "source_refs",
+          "last_verified_commit",
+          "supersedes"
+        ],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+          "kind": { "type": "string", "enum": ["architecture", "decision", "contract", "gotcha"] },
+          "status": { "type": "string", "enum": ["active", "stale", "superseded", "deprecated"] },
+          "stale": { "type": "boolean" },
+          "drift_reasons": { "type": "array", "items": { "type": "string" } },
+          "path": { "type": "string" },
+          "summary": { "type": "string", "minLength": 10, "maxLength": 240 },
+          "tags": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+          "token_estimate": { "type": "integer", "minimum": 1 },
+          "content_sha256": { "type": "string" },
+          "sections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "title", "level", "lines", "token_estimate"],
+              "properties": {
+                "id": { "type": "string" },
+                "title": { "type": "string" },
+                "level": { "type": "integer", "minimum": 1, "maximum": 6 },
+                "lines": {
+                  "type": "array",
+                  "items": { "type": "integer", "minimum": 1 },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "token_estimate": { "type": "integer", "minimum": 0 }
+              }
+            }
+          },
+          "source_refs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["path"],
+              "properties": {
+                "path": { "type": "string" },
+                "symbols": { "type": "array", "items": { "type": "string" } },
+                "sha256_prefix": { "type": "string" }
+              }
+            }
+          },
+          "last_verified_commit": { "type": ["string", "null"] },
+          "supersedes": { "type": ["string", "null"] }
+        }
+      }
+    }
+  }
+}

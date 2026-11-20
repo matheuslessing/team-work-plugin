@@ -1,0 +1,40 @@
+{
+  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "name": "team-run",
+  "version": "2.0.0",
+  "description": "Full Dual-Track LTS pipeline with Contract Freeze, Worktrees, Verification Gate, Propose-Probe-Compose remediation, and Victory Audit.",
+  "token_budget_tier": "high",
+  "eligibility": {
+    "phases": ["INIT", "SURVEY", "CONTRACT_FROZEN", "DUAL_TRACK", "GATE", "REMEDIATION", "MANUAL"],
+    "runtimes": ["DEVIN_CLI_LOCAL", "DEVIN_CLOUD", "ANTIGRAVITY"]
+  },
+  "P_preconditions": [
+    { "type": "file_exists", "path": ".agents/teamwork/ORIGINAL_REQUEST.md" }
+  ],
+  "O_operation": {
+    "authority_profile": "dispatch_only",
+    "allowed_write_globs": [".agents/teamwork/**"],
+    "denied_shell_patterns": [],
+    "program_functions": ["pf-write-boundary", "pf-handoff-completeness", "pf-loop-breaker"]
+  },
+  "A_artifacts": [
+    { "path": ".agents/teamwork/state.json", "required": true },
+    { "path": ".agents/teamwork/view.json", "required": true },
+    { "path": ".agents/teamwork/sentinel/handoff.md", "required": true }
+  ],
+  "V_validators": [
+    { "cmd": "node ${PLUGIN_ROOT}/scripts/teamwork-cli.mjs check-gate --workdir ." },
+    { "cmd": "node ${PLUGIN_ROOT}/scripts/teamwork-cli.mjs scan-integrity --workdir . --strict" }
+  ],
+  "F_failure_modes": [
+    { "code": "GATE_EXHAUSTED", "action": "TRANSITION_FAILED", "route_to": "user_escalation" },
+    { "code": "BUDGET_EXCEEDED", "action": "SUCCEED_ORCHESTRATOR", "route_to": "sentinel" }
+  ],
+  "ecosystem_edges": {
+    "depends_on": ["team-craft"],
+    "compatible_with": ["team-survey", "team-contract-freeze", "team-test-track", "team-worktree", "team-board", "team-gate", "team-status"],
+    "redundant_with": [],
+    "alternative_to": ["team-quick"],
+    "lineage": "team-run@1.0.0"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "name": "team-contract-freeze",
+  "version": "1.0.0",
+  "description": "Validate and SHA-256 hash PROJECT.md Interface Contracts into state.json before parallel Track A & Track B execution.",
+  "token_budget_tier": "low",
+  "eligibility": {
+    "phases": ["INIT", "SURVEY", "MANUAL"],
+    "runtimes": ["DEVIN_CLI_LOCAL", "DEVIN_CLOUD", "ANTIGRAVITY"]
+  },
+  "P_preconditions": [
+    { "type": "file_exists", "path": ".agents/teamwork/<active_orchestrator>/PROJECT.md" }
+  ],
+  "O_operation": {
+    "authority_profile": "dispatch_only",
+    "allowed_write_globs": [".agents/teamwork/state.json", ".agents/teamwork/board.jsonl", ".agents/teamwork/view.json"],
+    "denied_shell_patterns": [],
+    "program_functions": ["pf-write-boundary"]
+  },
+  "A_artifacts": [
+    { "path": ".agents/teamwork/state.json", "required": true }
+  ],
+  "V_validators": [
+    { "cmd": "node ${PLUGIN_ROOT}/scripts/teamwork-cli.mjs state show --workdir ." }
+  ],
+  "F_failure_modes": [
+    { "code": "EMPTY_CONTRACTS", "action": "BLOCK_TRANSITION", "route_to": "orchestrator" }
+  ],
+  "ecosystem_edges": {
+    "depends_on": ["team-survey"],
+    "compatible_with": ["team-test-track", "team-worktree", "team-run"],
+    "redundant_with": [],
+    "alternative_to": [],
+    "lineage": "team-contract-freeze@1.0.0"
+  }
+}

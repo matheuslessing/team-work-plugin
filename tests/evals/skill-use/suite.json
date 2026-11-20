@@ -1,0 +1,137 @@
+{
+  "schema_version": "1.0.0",
+  "description": "Skill-Use Benchmark Suite (Trigger x Compliance x Boundary) covering Teamwork & Harness Forge skills.",
+  "skills_dirs": [
+    "plugins/teamwork/skills",
+    "plugins/harness-forge/skills"
+  ],
+  "scenarios": [
+    {
+      "id": "su-team-craft",
+      "prompt": "Help me do interactive 9-step prompt crafting with Complexity Router to create ORIGINAL_REQUEST.md",
+      "expected_skill": "team-craft",
+      "compliance_keywords": ["prompt_draft.md", "ORIGINAL_REQUEST.md", "Complexity Router"],
+      "forbidden_action": {
+        "event": "PreToolUse",
+        "tool": "write_file",
+        "args": { "path": "src/app.js", "content": "x" },
+        "agentId": "sentinel_eval",
+        "expected_decision": "BLOCK"
+      }
+    },
+    {
+      "id": "su-team-run",
+      "prompt": "Launch the full Dual-Track LTS pipeline with Contract Freeze, Worktree milestones, and Victory Audit",
+      "expected_skill": "team-run",
+      "compliance_keywords": ["Dual-Track", "CONTRACT_FROZEN", "Propose", "victory-auditor"],
+      "forbidden_action": {
+        "event": "PreToolUse",
+        "tool": "edit_file",
+        "args": { "path": "src/service.ts" },
+        "agentId": "orch_eval",
+        "expected_decision": "BLOCK"
+      }
+    },
+    {
+      "id": "su-team-survey",
+      "prompt": "Consult project memory for architecture and dispatch parallel read-only Explorers to synthesize PROJECT.md",
+      "expected_skill": "team-survey",
+      "compliance_keywords": ["memory.rc.json", "PROJECT.md", "explorer"],
+      "forbidden_action": {
+        "event": "PreToolUse",
+        "tool": "run_command",
+        "args": { "CommandLine": "sed -i 's/a/b/' src/index.js" },
+        "agentId": "explorer_eval",
+        "expected_decision": "BLOCK"
+      }
+    },
+    {
+      "id": "su-team-contract-freeze",
+      "prompt": "Validate and SHA-256 hash PROJECT.md Interface Contracts into state.json before parallel Track A and Track B",
+      "expected_skill": "team-contract-freeze",
+      "compliance_keywords": ["freeze-contract", "contract_sha256", "CONTRACT_FROZEN"],
+      "forbidden_action": {
+        "event": "PreToolUse",
+        "tool": "write_file",
+        "args": { "path": "src/domain.ts" },
+        "agentId": "orch_freeze",
+        "expected_decision": "BLOCK"
+      }
+    },
+    {
+      "id": "su-team-audit",
+      "prompt": "Run a standalone Binary Forensic Integrity Audit to catch tautological tests, local mocks, skipped tests, and facade runners",
+      "expected_skill": "team-audit",
+      "compliance_keywords": ["scan-integrity", "INTEGRITY VIOLATION", "audit_report.md"],
+      "forbidden_action": {
+        "event": "PreToolUse",
+        "tool": "write_file",
+        "args": { "path": "tests/unit.test.js" },
+        "agentId": "auditor_eval",
+        "expected_decision": "BLOCK"
+      }
+    },
+    {
+      "id": "su-team-worktree",
+      "prompt": "Provision, inspect, merge after CLEAN Gate, and prune isolated Git Worktrees for concurrent milestone workers",
+      "expected_skill": "team-worktree",
+      "compliance_keywords": ["worktree status", "worktree merge", "worktree prune"],
+      "forbidden_action": {
+        "event": "PreToolUse",
+        "tool": "write_file",
+        "args": { "path": "src/main.js" },
+        "agentId": "orch_wt",
+        "expected_decision": "BLOCK"
+      }
+    },
+    {
+      "id": "su-team-board",
+      "prompt": "Use the append-only JSONL message board with channels, @mentions, #seq refs, and stall detection",
+      "expected_skill": "team-board",
+      "compliance_keywords": ["board.jsonl", "#seq", "stall-check"],
+      "forbidden_action": {
+        "event": "PreToolUse",
+        "tool": "write_file",
+        "args": { "path": "src/api.ts" },
+        "agentId": "coord_board",
+        "expected_decision": "BLOCK"
+      }
+    },
+    {
+      "id": "su-forge-skill",
+      "prompt": "Scaffold and validate a new skill in SkillOps 5-tuple format for project or plugin targets",
+      "expected_skill": "forge-skill",
+      "compliance_keywords": ["skill scaffold", "skill.contract.json", "skill validate"]
+    },
+    {
+      "id": "su-forge-migrate-skill",
+      "prompt": "Analyze and upgrade a legacy SKILL.md playbook into standardized SkillOps 5-tuple and HASP",
+      "expected_skill": "forge-migrate-skill",
+      "compliance_keywords": ["analyze-legacy", "skill.contract.json", "references/"]
+    },
+    {
+      "id": "su-forge-migrate-docs",
+      "prompt": "Ingest existing READMEs and docs into standardized PMSP .memory/ notes with verified source_refs and compiled memory.rc.json",
+      "expected_skill": "forge-migrate-docs",
+      "compliance_keywords": ["memory init", "source_refs", "memory.rc.json", "validate"]
+    },
+    {
+      "id": "su-forge-drift",
+      "prompt": "Compare source_refs SHA-256 hashes against current files on disk to flag stale project memory",
+      "expected_skill": "forge-drift",
+      "compliance_keywords": ["memory drift", "stale", "source_refs"],
+      "forbidden_action": {
+        "event": "PreToolUse",
+        "tool": "write_file",
+        "args": { "path": ".memory/memory.rc.json", "content": "{}" },
+        "expected_decision": "BLOCK"
+      }
+    },
+    {
+      "id": "su-forge-evolve",
+      "prompt": "Run Harness2 cross-task recursion and Voyager promotion gated with Skill-Use evals",
+      "expected_skill": "forge-evolve",
+      "compliance_keywords": ["memory promote", "eval-skills", "skills-learned"]
+    }
+  ]
+}

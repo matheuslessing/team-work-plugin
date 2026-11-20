@@ -1,0 +1,33 @@
+{
+  "$schema": "../../../packages/core/schemas/skill-contract.v1.json",
+  "name": "forge-validate",
+  "version": "1.0.0",
+  "description": "Strictly validate 100% of .memory/ docs, memory.rc.json index sync, and skill SkillOps contracts without LLM calls.",
+  "token_budget_tier": "low",
+  "eligibility": {
+    "phases": ["INIT", "SURVEY", "GATE", "VICTORY_AUDIT", "DONE", "MANUAL"],
+    "runtimes": ["DEVIN_CLI_LOCAL", "DEVIN_CLOUD", "ANTIGRAVITY"]
+  },
+  "P_preconditions": [],
+  "O_operation": {
+    "authority_profile": "read_only",
+    "allowed_write_globs": [".memory/memory.rc.json", ".memory/MEMORY.md"],
+    "denied_shell_patterns": ["git\\s+(commit|push|reset)"],
+    "program_functions": ["pf-rcjson-readonly", "pf-memory-guard", "pf-skill-contract-guard"]
+  },
+  "A_artifacts": [],
+  "V_validators": [
+    { "cmd": "node ${PLUGIN_ROOT}/scripts/forge-cli.mjs validate --workdir . --strict" }
+  ],
+  "F_failure_modes": [
+    { "code": "INDEX_DESYNC", "action": "REBUILD_INDEX", "route_to": "forge-memory" },
+    { "code": "CONTRACT_INVALID", "action": "REPAIR_SKILL", "route_to": "forge-migrate-skill" }
+  ],
+  "ecosystem_edges": {
+    "depends_on": [],
+    "compatible_with": ["forge-memory", "forge-drift", "forge-skillops"],
+    "redundant_with": [],
+    "alternative_to": [],
+    "lineage": "forge-validate@1.0.0"
+  }
+}
